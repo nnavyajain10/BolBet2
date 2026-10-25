@@ -1,0 +1,3050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BOLBET — bet on the chaos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..900&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<!--
+  BOLBET v2 — Part 2 of the Front End Engineering-II project.
+  Part 1 was plain JavaScript. Part 2 rebuilds the same app in React and adds:
+    - Redux Toolkit (createSlice, createAsyncThunk, extraReducers, middleware)
+    - Context API (auth, toasts, sound, the "new bet" composer)
+    - Hooks: useState, useEffect, useRef, useMemo, useCallback, useReducer,
+      useContext, useSyncExternalStore + 12 custom hooks (useDebounce, useForm ...)
+    - Routing (hash router), forms with validation, reusable inputs
+    - Modal, tabs, dropdowns, toast notifications, search/filter/sort
+    - REST APIs with axios: loading, retry, error handling, pagination,
+      infinite scroll, debounce, CRUD, third-party APIs (TVMaze, GitHub, DummyJSON)
+  Everything still lives in this one HTML file. Libraries load from a CDN and
+  Babel turns the JSX into JavaScript inside the browser.
+-->
+
+<style>
+/* =========================================================
+   1. THEME COLOURS
+   ========================================================= */
+:root{
+  --bg:#0d0b14; --bg-alt:#141026; --surface:#1b1730; --surface-2:#242040;
+  --lime:#c6ff3d; --pink:#ff3ea0; --cyan:#3ed9ff; --purple:#9b6bff; --orange:#ffa53e;
+  --text:#f6f3ff; --text-dim:#a79fc4; --border:rgba(255,255,255,.09);
+}
+
+/* =========================================================
+   2. BASE
+   ========================================================= */
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{
+  background:
+    radial-gradient(circle at 12% -10%, rgba(155,107,255,.35), transparent 40%),
+    radial-gradient(circle at 90% 0%, rgba(255,62,160,.25), transparent 45%),
+    var(--bg);
+  color:var(--text); font-family:'Inter', sans-serif; min-height:100vh; overflow-x:hidden;
+}
+h1,h2,h3,h4{ font-family:'Bricolage Grotesque', sans-serif; }
+a{ color:inherit; text-decoration:none; }
+button{ font-family:inherit; cursor:pointer; border:none; }
+.wrap{ max-width:1180px; margin:0 auto; padding:0 24px; }
+main{ min-height:60vh; }
+.boot{ min-height:100vh; display:grid; place-items:center; color:var(--text-dim); font-family:'Space Mono',monospace; }
+.ic{ display:inline-flex; width:var(--s); height:var(--s); flex-shrink:0; vertical-align:middle; }
+.ic svg{ width:100%; height:100%; }
+
+/* =========================================================
+   3. NAVBAR
+   ========================================================= */
+nav.top{ position:sticky; top:0; z-index:50; background:rgba(13,11,20,.88);
+  backdrop-filter:blur(10px); border-bottom:1px solid var(--border); }
+.nav-inner{ max-width:1180px; margin:0 auto; padding:14px 24px;
+  display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+.logo{ font-size:26px; font-weight:800; font-family:'Bricolage Grotesque'; }
+.logo span{ color:var(--bg); background:var(--lime); padding:2px 8px; border-radius:8px; display:inline-block; }
+.nav-links{ display:flex; gap:4px; flex-wrap:wrap; align-items:center; }
+.nav-links > a, .nav-more{ background:none; color:var(--text-dim); font-weight:600; font-size:14px;
+  padding:8px 12px; border-radius:999px; display:inline-flex; align-items:center; gap:6px; }
+.nav-links > a:hover, .nav-more:hover{ color:var(--text); background:var(--surface); }
+.nav-links > a.active, .nav-more.active{ background:var(--lime); color:var(--bg); font-weight:800; }
+.nav-right{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.clout-pill{ background:var(--surface); border:1px solid var(--border);
+  padding:8px 14px; border-radius:999px; font-size:14px; font-weight:700; }
+.clout-pill b{ color:var(--lime); }
+.btn{ background:var(--lime); color:var(--bg); font-weight:800; font-size:14px;
+  padding:10px 18px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+.btn:hover{ opacity:.88; }
+.btn:disabled, .btn-outline:disabled{ opacity:.5; cursor:not-allowed; }
+.btn-outline{ background:none; border:1.5px solid var(--border); color:var(--text);
+  padding:10px 18px; border-radius:999px; font-weight:700; font-size:14px;
+  display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+.btn-outline:hover{ border-color:var(--lime); color:var(--lime); }
+.btn-sm{ padding:7px 13px; font-size:12.5px; }
+.user-chip{ display:inline-flex; align-items:center; gap:8px; background:var(--surface);
+  border:1px solid var(--border); padding:4px 12px 4px 4px; border-radius:999px; font-weight:700; font-size:13.5px; }
+.user-chip img{ width:30px; height:30px; border-radius:50%; }
+
+/* =========================================================
+   4. HERO
+   ========================================================= */
+.hero{ padding:90px 24px 50px; text-align:center; position:relative; overflow:hidden; }
+.hero > *{ position:relative; z-index:1; }
+.blob{ position:absolute; border-radius:50%; filter:blur(70px); opacity:.35; z-index:0; }
+.blob1{ width:340px; height:340px; background:var(--purple); top:-100px; left:-70px; }
+.blob2{ width:300px; height:300px; background:var(--pink); bottom:-90px; right:-60px; }
+.hero-tag{ display:inline-block; font-family:'Space Mono',monospace; font-size:12.5px;
+  text-transform:uppercase; letter-spacing:1.5px; background:var(--surface);
+  border:1px solid var(--border); padding:7px 16px; border-radius:999px; color:var(--cyan); margin-bottom:28px; }
+.hero h1{ font-size:clamp(44px, 9vw, 100px); line-height:.95; font-weight:800; letter-spacing:-2px; }
+.hero h1 .line{ display:block; }
+.hero h1 .pink{ background:var(--pink); color:var(--bg); padding:0 12px; border-radius:10px; }
+.hero h1 .lime{ background:var(--lime); color:var(--bg); padding:0 12px; border-radius:10px; }
+.hero p{ max-width:600px; margin:26px auto 0; color:var(--text-dim); font-size:17px; }
+.hero-buttons{ margin-top:32px; display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
+.stickers{ display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:32px; }
+.sticker{ font-family:'Space Mono',monospace; font-size:12px; font-weight:700;
+  padding:8px 15px; border-radius:999px; border:1px solid var(--border); background:var(--surface); }
+.avatars{ display:flex; justify-content:center; align-items:center; gap:10px; margin-top:32px; flex-wrap:wrap; }
+.avatars img{ width:38px; height:38px; border-radius:50%; border:2px solid var(--bg); margin-left:-11px; }
+.avatars img:first-child{ margin-left:0; }
+.avatars span{ font-size:13.5px; color:var(--text-dim); font-weight:600; }
+.stats{ display:flex; justify-content:center; gap:50px; margin-top:60px; flex-wrap:wrap; }
+.stat b{ display:block; font-size:34px; font-weight:800; font-family:'Bricolage Grotesque'; }
+.stat span{ font-size:12.5px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; }
+
+/* =========================================================
+   5. TICKER
+   ========================================================= */
+.ticker{ margin-top:56px; background:var(--surface); overflow:hidden; padding:12px 0;
+  border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+.ticker-track{ display:flex; gap:40px; white-space:nowrap; width:max-content; animation:slide 30s linear infinite; }
+.ticker-track span{ font-family:'Space Mono',monospace; font-size:13px; color:var(--text-dim); }
+.ticker-track b{ color:var(--lime); }
+@keyframes slide{ from{ transform:translateX(0); } to{ transform:translateX(-50%); } }
+@media (prefers-reduced-motion: reduce){ .ticker-track{ animation:none; } }
+
+/* =========================================================
+   6. SECTIONS + CARDS
+   ========================================================= */
+.section{ padding:70px 24px 0; }
+.section-head{ display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; }
+.section h2{ font-size:34px; letter-spacing:-1px; }
+.section .subtitle{ color:var(--text-dim); font-size:14.5px; margin-top:4px; margin-bottom:26px; }
+.grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(290px, 1fr)); gap:18px; }
+.card{ background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:22px; }
+.card h4{ font-size:16.5px; margin-bottom:7px; }
+.card p{ font-size:13.5px; color:var(--text-dim); line-height:1.55; }
+.card > .ic{ margin-bottom:12px; }
+.tile{ background:var(--surface); border:1px solid var(--border); border-radius:18px;
+  padding:22px; text-align:center; display:block; }
+.tile:hover{ border-color:var(--lime); }
+.tile .name{ font-weight:700; font-size:14.5px; margin-top:8px; }
+.tile .count{ font-size:12px; color:var(--text-dim); margin-top:4px; }
+.list-box{ background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:10px; }
+.row{ display:flex; align-items:center; gap:14px; padding:13px 15px; border-radius:14px; border:1px solid transparent; }
+.row:hover{ background:var(--surface-2); }
+.row .text{ font-size:13.5px; color:var(--text-dim); }
+.row .text b{ color:var(--lime); }
+.row.me{ background:rgba(198,255,61,.08); border-color:rgba(198,255,61,.3); }
+.quote img{ width:38px; height:38px; border-radius:50%; }
+.quote .top{ display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+.quote .who{ font-weight:700; font-size:14px; }
+.quote .role{ font-size:11.5px; color:var(--text-dim); }
+.quote p{ font-style:italic; font-size:14.5px; line-height:1.6; }
+.faq{ background:var(--surface); border:1px solid var(--border); border-radius:16px; margin-bottom:12px; }
+.faq button.q{ width:100%; background:none; color:var(--text); display:flex; justify-content:space-between;
+  font-weight:700; font-size:15px; gap:12px; padding:18px 20px; text-align:left; }
+.faq .sign{ color:var(--lime); }
+.faq .a{ color:var(--text-dim); font-size:13.5px; line-height:1.65; padding:0 20px 18px; }
+.banner{ background:linear-gradient(120deg, var(--purple), var(--pink));
+  border-radius:26px; padding:54px 30px; text-align:center; margin-top:30px; }
+.banner h2{ color:#fff; margin-bottom:16px; }
+.banner p{ color:rgba(255,255,255,.85); max-width:420px; margin:0 auto 22px; font-size:15px; }
+.banner .btn{ background:var(--bg); color:var(--lime); }
+
+/* =========================================================
+   7. BET CARDS
+   ========================================================= */
+.bet{ background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:22px; }
+.bet:hover{ border-color:rgba(255,255,255,.2); }
+.bet-top{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:8px; }
+.category{ font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.8px;
+  padding:5px 10px; border-radius:999px; background:var(--surface-2); color:var(--cyan); }
+.timer{ font-family:'Space Mono',monospace; font-size:12px; color:var(--text-dim); }
+.timer.soon{ color:var(--pink); font-weight:700; }
+.bet > .ic{ margin-bottom:12px; }
+.bet .question{ font-size:18px; font-weight:700; line-height:1.3; margin-bottom:16px; min-height:46px; }
+.option{ position:relative; width:100%; text-align:left; overflow:hidden;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:14px;
+  padding:12px 14px; margin-bottom:8px; color:var(--text); font-weight:700; font-size:14.5px; }
+.option:hover:not(:disabled){ border-color:var(--lime); }
+.option:disabled{ cursor:default; }
+.option.picked{ border-color:var(--cyan); }
+.option.won{ border-color:var(--lime); }
+.bar{ position:absolute; left:0; top:0; bottom:0; width:0; background:rgba(198,255,61,.25); transition:width .5s ease; }
+.option.b .bar{ background:rgba(255,62,160,.25); }
+.option .inner{ position:relative; display:flex; justify-content:space-between; gap:10px; }
+.percent{ font-family:'Space Mono',monospace; font-size:13px; color:var(--text-dim); }
+.bet-foot{ display:flex; justify-content:space-between; align-items:center;
+  font-size:12.5px; color:var(--text-dim); margin-top:10px; gap:8px; }
+.result{ font-weight:800; }
+.result.win{ color:var(--lime); }
+.result.loss{ color:var(--pink); }
+.reactions{ display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+.react{ display:inline-flex; align-items:center; gap:5px; background:var(--surface-2); border:1px solid var(--border);
+  border-radius:999px; padding:6px 11px; font-size:12.5px; font-weight:700; color:var(--text-dim); }
+.react:hover{ border-color:var(--lime); color:var(--text); }
+.react.danger:hover{ border-color:var(--pink); color:var(--pink); }
+.push-right{ margin-left:auto; }
+
+/* =========================================================
+   8. FILTERS, CHIPS, DROPDOWN, PAGINATION
+   ========================================================= */
+.filters{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:18px; align-items:center; }
+.search-wrap{ position:relative; flex:1; min-width:220px; }
+.search-wrap > .ic{ position:absolute; left:15px; top:50%; transform:translateY(-50%); color:var(--text-dim); }
+.search-wrap input{ width:100%; background:var(--surface); border:1px solid var(--border); color:var(--text);
+  padding:11px 16px 11px 42px; border-radius:999px; font-family:inherit; font-size:14px; font-weight:600; outline:none; }
+.search-wrap input:focus{ border-color:var(--cyan); }
+.typing{ position:absolute; right:16px; top:50%; transform:translateY(-50%); font-size:11.5px;
+  color:var(--text-dim); font-family:'Space Mono',monospace; }
+.chips{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:24px; }
+.chip{ background:var(--surface); border:1px solid var(--border); color:var(--text-dim);
+  padding:9px 16px; border-radius:999px; font-weight:700; font-size:13.5px; display:inline-flex; gap:8px; align-items:center; }
+.chip:hover{ color:var(--text); }
+.chip.active{ background:var(--purple); border-color:var(--purple); color:#fff; }
+.count-badge{ background:rgba(0,0,0,.25); border-radius:999px; padding:1px 8px; font-size:11.5px; }
+.dropdown{ position:relative; display:inline-block; }
+.dropdown-btn{ display:inline-flex; align-items:center; gap:8px; background:var(--surface);
+  border:1px solid var(--border); color:var(--text); padding:10px 16px; border-radius:999px; font-weight:600; font-size:14px; }
+.dropdown-btn:hover{ border-color:var(--cyan); }
+.dropdown-btn small{ color:var(--text-dim); font-weight:600; }
+.dropdown-menu{ position:absolute; top:calc(100% + 8px); min-width:200px; background:var(--bg-alt);
+  border:1px solid var(--border); border-radius:14px; padding:6px; z-index:60;
+  box-shadow:0 18px 40px rgba(0,0,0,.45); animation:pop .15s ease; }
+.dropdown-menu.left{ left:0; } .dropdown-menu.right{ right:0; }
+.dropdown-item{ display:flex; width:100%; text-align:left; align-items:center; justify-content:space-between;
+  gap:10px; background:none; color:var(--text-dim); padding:10px 12px; border-radius:10px; font-weight:600; font-size:14px; }
+.dropdown-item:hover, .dropdown-item:focus{ background:var(--surface); color:var(--text); outline:none; }
+.dropdown-item.selected{ color:var(--lime); }
+.pagination{ display:flex; gap:6px; justify-content:center; align-items:center; margin-top:28px; flex-wrap:wrap; }
+.page-btn{ min-width:38px; height:38px; padding:0 10px; border-radius:12px; background:var(--surface);
+  border:1px solid var(--border); color:var(--text-dim); font-weight:700; }
+.page-btn:hover:not(:disabled){ color:var(--text); border-color:var(--lime); }
+.page-btn.active{ background:var(--lime); color:var(--bg); border-color:var(--lime); }
+.page-btn:disabled{ opacity:.4; cursor:not-allowed; }
+.dots{ color:var(--text-dim); padding:0 4px; }
+.result-meta{ font-size:12.5px; color:var(--text-dim); margin:-6px 0 18px; font-family:'Space Mono',monospace; }
+
+/* =========================================================
+   9. LOADING / ERROR / EMPTY STATES
+   ========================================================= */
+.spinner{ width:18px; height:18px; border:2.5px solid currentColor; border-right-color:transparent;
+  border-radius:50%; display:inline-block; animation:spin .7s linear infinite; vertical-align:middle; }
+@keyframes spin{ to{ transform:rotate(360deg); } }
+.skeleton{ background:linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%);
+  background-size:200% 100%; animation:shimmer 1.2s infinite; border-radius:20px; min-height:200px; border:1px solid var(--border); }
+@keyframes shimmer{ to{ background-position:-200% 0; } }
+.state-box{ grid-column:1/-1; text-align:center; padding:44px 20px; background:var(--surface);
+  border:1px dashed var(--border); border-radius:20px; color:var(--text-dim); font-size:14px; }
+.state-box.error{ border-color:rgba(255,62,160,.55); }
+.state-box h4{ color:var(--text); font-size:18px; margin-bottom:6px; }
+.state-box .btn, .state-box .btn-outline{ margin-top:16px; }
+.load-row{ display:flex; justify-content:center; align-items:center; gap:10px; padding:28px; color:var(--text-dim); font-size:14px; }
+.sentinel{ height:2px; }
+.credit{ font-size:12px; color:var(--text-dim); margin-top:24px; text-align:center; }
+.credit a{ text-decoration:underline; }
+
+/* =========================================================
+   10. FORMS (reusable inputs)
+   ========================================================= */
+.field{ margin-bottom:16px; }
+.field > label, .field > .label{ font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.5px;
+  color:var(--text-dim); display:block; margin-bottom:7px; }
+.req{ color:var(--pink); margin-left:3px; }
+.input{ width:100%; background:var(--surface); border:1.5px solid var(--border); color:var(--text);
+  padding:11px 14px; border-radius:12px; font-family:inherit; font-size:14px; font-weight:600; outline:none; transition:border-color .15s; }
+.modal .input{ background:var(--surface); }
+.input:focus{ border-color:var(--cyan); }
+.field.has-error .input{ border-color:var(--pink); }
+textarea.input{ resize:vertical; min-height:96px; line-height:1.5; }
+select.input{ appearance:none; background-image:linear-gradient(45deg, transparent 50%, var(--text-dim) 50%), linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+  background-position:calc(100% - 20px) 50%, calc(100% - 14px) 50%; background-size:6px 6px; background-repeat:no-repeat; padding-right:36px; }
+.field-error{ color:var(--pink); font-size:12.5px; margin-top:6px; font-weight:600; }
+.field-hint{ color:var(--text-dim); font-size:12px; margin-top:6px; }
+.field-hint.ok{ color:var(--lime); font-weight:600; }
+.input-row{ position:relative; }
+.input-row .peek{ position:absolute; right:8px; top:50%; transform:translateY(-50%); background:var(--surface-2);
+  color:var(--text-dim); font-size:12px; font-weight:700; padding:6px 10px; border-radius:8px; }
+.field > label.check{ display:flex; align-items:flex-start; gap:10px; font-size:14px; color:var(--text);
+  cursor:pointer; font-weight:600; text-transform:none; letter-spacing:0; margin:0; }
+.check input{ accent-color:var(--lime); width:18px; height:18px; margin-top:1px; flex-shrink:0; }
+.pill-group{ display:flex; flex-wrap:wrap; gap:8px; }
+.pill-check{ display:inline-flex; align-items:center; gap:6px; background:var(--surface); border:1.5px solid var(--border);
+  color:var(--text-dim); padding:8px 14px; border-radius:999px; font-size:13px; font-weight:700; cursor:pointer; }
+.pill-check input{ position:absolute; opacity:0; pointer-events:none; }
+.pill-check.on{ background:var(--purple); border-color:var(--purple); color:#fff; }
+.pill-check:focus-within{ outline:2px solid var(--cyan); outline-offset:2px; }
+.strength{ display:flex; gap:6px; margin-top:8px; }
+.strength span{ flex:1; height:5px; border-radius:999px; background:var(--surface-2); }
+.avatar-pick{ display:flex; gap:10px; flex-wrap:wrap; }
+.avatar-pick button{ padding:0; background:none; border:2.5px solid var(--border); border-radius:50%; }
+.avatar-pick button.on{ border-color:var(--lime); }
+.avatar-pick img{ width:52px; height:52px; border-radius:50%; display:block; }
+.form-card{ background:var(--surface); border:1px solid var(--border); border-radius:22px; padding:26px; }
+.form-card .input{ background:var(--bg-alt); }
+.form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:0 18px; }
+.span-2{ grid-column:1/-1; }
+.server-error{ background:rgba(255,62,160,.12); border:1px solid rgba(255,62,160,.4); color:var(--pink);
+  border-radius:12px; padding:12px 14px; font-size:13.5px; font-weight:600; margin-bottom:16px; }
+.two-col{ display:grid; grid-template-columns:340px 1fr; gap:24px; align-items:start; }
+.sticky{ position:sticky; top:96px; }
+@media(max-width:900px){ .two-col{ grid-template-columns:1fr; } .sticky{ position:static; } }
+@media(max-width:640px){ .form-grid{ grid-template-columns:1fr; } }
+
+/* =========================================================
+   11. LEADERBOARD + PROFILE
+   ========================================================= */
+.rank{ font-weight:800; font-size:17px; width:30px; color:var(--text-dim); }
+.rank.top{ color:var(--lime); }
+.row img{ width:42px; height:42px; border-radius:50%; border:2px solid var(--border); }
+.row .name{ font-weight:700; }
+.row .role{ font-size:12px; color:var(--text-dim); }
+.row .grow{ flex:1; }
+.row .score{ font-family:'Space Mono',monospace; font-weight:700; color:var(--lime); }
+.profile{ display:flex; align-items:center; gap:20px; background:var(--surface);
+  border:1px solid var(--border); border-radius:20px; padding:26px; margin-bottom:28px; flex-wrap:wrap; }
+.profile > img{ width:80px; height:80px; border-radius:50%; border:3px solid var(--lime); }
+.profile .who h3{ font-size:24px; }
+.profile .who p{ color:var(--text-dim); font-size:14px; }
+.profile .numbers{ display:flex; gap:28px; margin-left:auto; flex-wrap:wrap; }
+.profile .numbers b{ display:block; font-size:22px; font-family:'Bricolage Grotesque'; }
+.profile .numbers span{ font-size:11.5px; color:var(--text-dim); text-transform:uppercase; }
+.badges{ display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:14px; }
+.badge{ background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:18px; text-align:center; opacity:.35; }
+.badge.unlocked{ opacity:1; border-color:var(--lime); }
+.badge .ic{ margin-bottom:8px; }
+.badge .title{ font-weight:700; font-size:13px; }
+.badge .need{ font-size:11px; color:var(--text-dim); margin-top:4px; }
+.my-bet{ display:flex; align-items:center; gap:14px; background:var(--surface);
+  border:1px solid var(--border); border-radius:14px; padding:15px 18px; margin-bottom:10px; flex-wrap:wrap; }
+.my-bet .q{ flex:1; font-weight:700; font-size:14px; min-width:160px; }
+.my-bet .pick{ font-size:12.5px; color:var(--lime); font-weight:700; }
+.status{ font-size:11.5px; font-family:'Space Mono',monospace; background:var(--surface-2);
+  padding:4px 10px; border-radius:999px; color:var(--text-dim); }
+.status.win{ color:var(--lime); } .status.loss{ color:var(--pink); }
+.link-btn{ color:var(--text-dim); font-size:12.5px; text-decoration:underline; background:none; margin-top:20px; }
+.link-btn:hover{ color:var(--pink); }
+.tag-row{ display:flex; gap:6px; flex-wrap:wrap; }
+.tag{ font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; background:var(--surface-2); color:var(--cyan); }
+
+/* =========================================================
+   12. DISCOVER (TV shows), WALL (posts), GITHUB
+   ========================================================= */
+.show{ background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:14px;
+  display:grid; grid-template-columns:100px 1fr; gap:14px; }
+.show img, .show .no-img{ width:100px; height:140px; object-fit:cover; border-radius:12px; background:var(--surface-2); }
+.show .no-img{ display:grid; place-items:center; color:var(--text-dim); }
+.show h4{ font-size:16px; line-height:1.25; margin-bottom:4px; }
+.show .meta{ font-size:11.5px; color:var(--text-dim); font-family:'Space Mono',monospace; margin-bottom:8px; }
+.show .meta .running{ color:var(--lime); } .show .meta .ended{ color:var(--pink); }
+.show .summary{ font-size:12.5px; color:var(--text-dim); line-height:1.5; margin-top:8px;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.show-actions{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+.post{ background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:20px;
+  display:flex; flex-direction:column; gap:10px; transition:opacity .2s; }
+.post.mine{ border-color:rgba(198,255,61,.4); }
+.post.busy{ opacity:.5; pointer-events:none; }
+.post-head{ display:flex; align-items:center; gap:10px; }
+.post-head img{ width:34px; height:34px; border-radius:50%; }
+.post-head .who{ font-weight:700; font-size:13.5px; }
+.post-head .when{ font-size:11.5px; color:var(--text-dim); }
+.post h4{ font-size:16px; line-height:1.35; }
+.post p{ font-size:13.5px; color:var(--text-dim); line-height:1.6; }
+.post-actions{ display:flex; gap:8px; margin-top:auto; align-items:center; flex-wrap:wrap; }
+.react.liked{ color:var(--pink); border-color:rgba(255,62,160,.5); }
+.gh{ display:flex; gap:18px; align-items:center; flex-wrap:wrap; }
+.gh > img{ width:84px; height:84px; border-radius:50%; border:3px solid var(--cyan); }
+.gh h3{ font-size:22px; }
+.gh .handle{ color:var(--text-dim); font-family:'Space Mono',monospace; font-size:13px; }
+.gh .bio{ color:var(--text-dim); font-size:14px; margin-top:6px; max-width:520px; }
+.gh-stats{ display:flex; gap:24px; margin-top:12px; flex-wrap:wrap; }
+.gh-stats b{ display:block; font-size:20px; font-family:'Bricolage Grotesque'; }
+.gh-stats span{ font-size:11px; color:var(--text-dim); text-transform:uppercase; }
+.repo h4{ font-size:15px; display:flex; justify-content:space-between; gap:10px; }
+.repo .lang{ font-size:12px; color:var(--text-dim); margin-top:10px; display:flex; gap:14px; }
+
+/* =========================================================
+   13. UNDER THE HOOD (lab)
+   ========================================================= */
+pre.code{ background:var(--bg); border:1px solid var(--border); border-radius:14px; padding:16px;
+  font-family:'Space Mono',monospace; font-size:12px; color:var(--text-dim); overflow:auto; max-height:460px; }
+.log-row{ display:flex; gap:14px; font-family:'Space Mono',monospace; font-size:12.5px;
+  padding:10px 12px; border-bottom:1px solid var(--border); }
+.log-row:last-child{ border-bottom:none; }
+.log-row .t{ color:var(--text-dim); } .log-row .type{ color:var(--lime); word-break:break-all; }
+.hook-table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+.hook-table td{ padding:12px 14px; border-bottom:1px solid var(--border); vertical-align:top; }
+.hook-table td:first-child{ font-family:'Space Mono',monospace; color:var(--lime); white-space:nowrap; }
+.hook-table td:last-child{ color:var(--text-dim); }
+
+/* =========================================================
+   14. MODAL + TOASTS + FOOTER
+   ========================================================= */
+.overlay{ display:flex; position:fixed; inset:0; background:rgba(8,7,14,.8);
+  align-items:center; justify-content:center; z-index:100; padding:20px; animation:fade .15s ease; }
+.modal{ background:var(--bg-alt); border:1px solid var(--border); border-radius:22px;
+  padding:30px; width:100%; max-height:92vh; overflow:auto; animation:pop .2s ease; }
+.modal h3{ font-size:24px; margin-bottom:6px; }
+.modal .hint{ color:var(--text-dim); font-size:13.5px; margin-bottom:18px; }
+.modal-buttons{ display:flex; gap:10px; margin-top:22px; }
+.modal-buttons > *{ flex:1; }
+#shareCanvas{ width:100%; border-radius:14px; margin:14px 0; }
+@keyframes fade{ from{ opacity:0; } }
+@keyframes pop{ from{ opacity:0; transform:translateY(8px) scale(.98); } to{ opacity:1; transform:none; } }
+.toasts{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column;
+  gap:8px; z-index:200; align-items:center; max-width:92vw; }
+.toast{ background:var(--lime); color:var(--bg); font-weight:800; font-size:14px; padding:12px 20px;
+  border-radius:999px; cursor:pointer; animation:pop .25s ease; box-shadow:0 10px 30px rgba(0,0,0,.4); text-align:center; }
+.toast.error{ background:var(--pink); color:#fff; }
+.toast.info{ background:var(--cyan); }
+footer{ text-align:center; padding:70px 24px 30px; color:var(--text-dim); font-size:13px; }
+footer .name{ font-size:20px; font-weight:800; color:var(--text); margin-bottom:8px; font-family:'Bricolage Grotesque'; }
+footer .name span{ color:var(--lime); }
+footer p + p{ margin-top:6px; }
+
+@media(max-width:640px){
+  .profile .numbers{ margin-left:0; gap:20px; }
+  .hero{ padding-top:60px; }
+  .section h2{ font-size:28px; }
+}
+</style>
+</head>
+
+<body>
+<div id="root"><div class="boot">Loading BOLBET…</div></div>
+<noscript>BOLBET needs JavaScript turned on.</noscript>
+
+<!-- Libraries (UMD builds put a global on window: React, ReactDOM, RTK, ReactRedux, axios, Babel) -->
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@reduxjs/toolkit@1.9.7/dist/redux-toolkit.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-redux@8.1.3/dist/react-redux.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios@1.7.7/dist/axios.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.25.6/babel.min.js"></script>
+
+<script type="text/babel" data-presets="react">
+/* =========================================================================
+   BOLBET v2  —  React + Redux Toolkit + Context API + REST APIs
+   Sections:
+     1  Data                    9  Reusable UI (Modal, Tabs, Dropdown ...)
+     2  Icons                  10  Reusable form inputs
+     3  Helpers                11  Bet card + share card
+     4  API layer (axios)      12  Pages
+     5  Redux Toolkit store    13  Navbar, footer, App, routes
+     6  Custom hooks           14  Start-up
+     7  Context providers
+     8  Router
+   ========================================================================= */
+
+const { useState, useEffect, useRef, useMemo, useCallback, useContext,
+        createContext, useReducer, useSyncExternalStore } = React;
+const { configureStore, createSlice, createAsyncThunk, nanoid } = RTK;
+const { Provider, useSelector, useDispatch } = ReactRedux;
+
+
+/* =========================================================
+   1. DATA
+   ========================================================= */
+
+const CATEGORIES = ["All", "Campus Drama", "Sports", "Academics", "Love Life", "Pop Culture", "Random"];
+
+const CATEGORY_COLOUR = {
+  "Campus Drama": "var(--pink)", "Sports": "var(--cyan)", "Academics": "var(--lime)",
+  "Love Life": "var(--pink)", "Pop Culture": "var(--orange)", "Random": "var(--purple)"
+};
+
+const CATEGORY_ICON = {
+  "Campus Drama": "masks", "Sports": "ball", "Academics": "book",
+  "Love Life": "heart", "Pop Culture": "tv", "Random": "dice"
+};
+
+const SEED_BETS = [
+  { id:1, question:"Will the canteen's mystery curry survive another semester?", category:"Campus Drama",
+    optionA:"It's a legend now", optionB:"Someone will complain", votesA:212, votesB:96, minutes:60 },
+  { id:2, question:"Does our hostel WiFi survive placement season?", category:"Academics",
+    optionA:"It holds up", optionB:"Dead by week 2", votesA:88, votesB:301, minutes:20 },
+  { id:3, question:"Will Aisha and Dev finally admit they're dating?", category:"Love Life",
+    optionA:"Official by Friday", optionB:"Denial till graduation", votesA:410, votesB:189, minutes:6 },
+  { id:4, question:"Cricket society vs Football society, who takes the grudge match?", category:"Sports",
+    optionA:"Cricket", optionB:"Football", votesA:266, votesB:254, minutes:90 },
+  { id:5, question:"Will anyone read the group project brief before the meeting?", category:"Academics",
+    optionA:"One person will", optionB:"Nobody, as always", votesA:44, votesB:378, minutes:150 },
+  { id:6, question:"Is the vending machine on floor 3 ever getting fixed?", category:"Random",
+    optionA:"Yes, eventually", optionB:"It's a shrine now", votesA:130, votesB:220, minutes:240 },
+  { id:7, question:"Will Professor Mehta's pop quiz actually happen tomorrow?", category:"Academics",
+    optionA:"He's bluffing", optionB:"It's really happening", votesA:301, votesB:190, minutes:12 },
+  { id:8, question:"Who wins best dressed at the fest, Block A or Block B?", category:"Campus Drama",
+    optionA:"Block A", optionB:"Block B", votesA:198, votesB:205, minutes:300 },
+  { id:9, question:"Will the fest DJ play the same five songs as last year?", category:"Pop Culture",
+    optionA:"Same playlist, obviously", optionB:"He'll surprise us", votesA:244, votesB:71, minutes:420 }
+];
+
+const LEADERBOARDS = {
+  weekly: [
+    { name:"Meera K.",  role:"12 win streak",           clout:4820, seed:"meera" },
+    { name:"Arjun P.",  role:"self-proclaimed oracle",  clout:3990, seed:"arjun" },
+    { name:"Simran G.", role:"never misses drama bets", clout:3510, seed:"simran" },
+    { name:"Kabir S.",  role:"sports specialist",       clout:2980, seed:"kabir" },
+    { name:"Nisha T.",  role:"academic clairvoyant",    clout:2140, seed:"nisha" }
+  ],
+  alltime: [
+    { name:"Simran G.", role:"season one legend",       clout:18920, seed:"simran" },
+    { name:"Meera K.",  role:"12 win streak",           clout:15410, seed:"meera" },
+    { name:"Rohan D.",  role:"quiet menace",            clout:12870, seed:"rohan" },
+    { name:"Arjun P.",  role:"self-proclaimed oracle",  clout:11330, seed:"arjun" },
+    { name:"Kabir S.",  role:"sports specialist",       clout:9980,  seed:"kabir" }
+  ]
+};
+
+const BADGES = [
+  { title:"Rookie Bettor",        need:1,  icon:"aim" },
+  { title:"Board Regular",        need:3,  icon:"flame" },
+  { title:"Certified Degenerate", need:6,  icon:"skull" },
+  { title:"Campus Oracle",        need:10, icon:"star" }
+];
+
+const TESTIMONIALS = [
+  { name:"Priya S.",  seed:"priya",  role:"WiFi bet survivor",  text:"Called the wifi bet at 2am and felt like a genius by morning." },
+  { name:"Yash R.",   seed:"yash",   role:"#7 on the board",    text:"The clout is fake but my bragging rights in the group chat are very real." },
+  { name:"Ananya M.", seed:"ananya", role:"curry bet believer", text:"Lost forty clout on the curry bet and honestly I regret nothing." }
+];
+
+const FAQS = [
+  { q:"Wait, is this real gambling?", a:"No. Zero real money ever changes hands. Clout is a made-up number that only fuels bragging rights." },
+  { q:"How do bets actually resolve?", a:"Every bet has a closing timer. When it hits zero a winning side is picked and clout is paid out." },
+  { q:"Can I lose clout?", a:"Yes. If your call is wrong when a bet resolves you lose some clout. That's what makes it interesting." },
+  { q:"Do I need an account?", a:"No, you can vote as a guest. Joining gives you a username, a profile and a 100 clout welcome bonus." },
+  { q:"Where do the shows and Wall posts come from?", a:"Shows come live from the TVMaze API and Wall posts from the DummyJSON API. Your own posts are saved in your browser." }
+];
+
+const INITIAL_FEED = [
+  { text:"Meera K. called the curry bet correctly", highlight:"+80 clout" },
+  { text:"New bet dropped in Love Life" },
+  { text:"Arjun P. is on a", highlight:"12 win streak" },
+  { text:"WiFi bet closing in 1 hour" },
+  { text:"Block A vs Block B heating up" },
+  { text:"Kabir S. climbed to #4 on the leaderboard" }
+];
+
+const COLLEGES = ["Chitkara University", "Thapar Institute", "Punjab Engineering College", "LPU", "Other"];
+const YEARS = ["1st year", "2nd year", "3rd year", "4th year"];
+const AVATAR_SEEDS = ["you", "nova", "pixel", "mango", "zara", "echo"];
+const DURATIONS = [
+  { value:"1", label:"1 hour" }, { value:"6", label:"6 hours" },
+  { value:"24", label:"1 day" }, { value:"72", label:"3 days" }
+];
+// Usernames that count as taken even before we ask the API
+const TAKEN_USERNAMES = ["meera", "arjun", "simran", "kabir", "nisha", "rohan", "admin", "bolbet"];
+
+
+/* =========================================================
+   2. ICONS
+   SVG markup kept as text. The <Icon> component sizes and colours it.
+   ========================================================= */
+
+function svg(inner, filled) {
+  return '<svg viewBox="0 0 24 24" fill="' + (filled ? "currentColor" : "none") +
+         '" stroke="' + (filled ? "none" : "currentColor") +
+         '" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + inner + "</svg>";
+}
+
+const ICONS = {
+  masks:   svg('<path d="M3 6h8v7a4 4 0 0 1-8 0V6z"/><path d="M13 6h8v7a4 4 0 0 1-8 0V6z"/>'),
+  ball:    svg('<circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/>'),
+  book:    svg('<path d="M4 4h11a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4z"/><path d="M18 7h2v13H6"/>'),
+  heart:   svg('<path d="M12 20s-7-4.4-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.6-7 9-7 9z"/>'),
+  dice:    svg('<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1" fill="currentColor"/>'),
+  tv:      svg('<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 3l4 4 4-4"/>'),
+  cross:   svg('<circle cx="12" cy="12" r="9"/><line x1="6" y1="6" x2="18" y2="18"/>'),
+  bolt:    svg('<polygon points="13 2 3 14 11 14 10 22 21 10 13 10"/>', true),
+  cap:     svg('<path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1.5 2.5 3 6 3s6-1.5 6-3v-5"/>'),
+  cup:     svg('<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M7 5H4a2 2 0 0 0 2 4M17 5h3a2 2 0 0 1-2 4"/>'),
+  eye:     svg('<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>'),
+  aim:     svg('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>'),
+  skull:   svg('<path d="M12 3a7 7 0 0 0-7 7c0 2.7 1.3 4.4 2.6 5.5V18a1 1 0 0 0 1 1h6.8a1 1 0 0 0 1-1v-2.5c1.3-1.1 2.6-2.8 2.6-5.5a7 7 0 0 0-7-7z"/><circle cx="9.3" cy="10.5" r="1.2" fill="currentColor"/><circle cx="14.7" cy="10.5" r="1.2" fill="currentColor"/>'),
+  flame:   svg('<path d="M12 2c1 3-2 4-2 7a4 4 0 0 0 8 0c0-2-1-3-1-5 2 1 4 4 4 8a7 7 0 0 1-14 0c0-4 3-6 5-10z"/>', true),
+  star:    svg('<path d="M12 2l1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6z"/>', true),
+  chat:    svg('<path d="M4 5h16v11H9l-5 4z"/>'),
+  code:    svg('<polyline points="8 6 2 12 8 18"/><polyline points="16 6 22 12 16 18"/>'),
+  chevron: svg('<polyline points="6 9 12 15 18 9"/>'),
+  check:   svg('<polyline points="5 12 10 17 19 7"/>'),
+  edit:    svg('<path d="M4 20h4L19 9l-4-4L4 16z"/>'),
+  trash:   svg('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'),
+  search:  svg('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/>'),
+  external:svg('<path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/>'),
+  refresh: svg('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>'),
+  share:   svg('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>'),
+  layers:  svg('<polygon points="12 2 22 7 12 12 2 7"/><polyline points="2 12 12 17 22 12"/><polyline points="2 17 12 22 22 17"/>')
+};
+
+/* dangerouslySetInnerHTML is safe here because ICONS is our own fixed text,
+   never something a user typed. */
+function Icon({ name, size = 26, color, className = "" }) {
+  return (
+    <span className={"ic " + className} style={{ "--s": size + "px", color }} aria-hidden="true"
+          dangerouslySetInnerHTML={{ __html: ICONS[name] || "" }} />
+  );
+}
+
+
+/* =========================================================
+   3. HELPERS
+   ========================================================= */
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const shorten = (text, max = 30) => (text.length > max ? text.slice(0, max) + "..." : text);
+const totalVotes = bet => bet.votesA + bet.votesB;
+const byVotes = (x, y) => totalVotes(y) - totalVotes(x);
+const avatarUrl = seed => "https://api.dicebear.com/7.x/adventurer/svg?seed=" + encodeURIComponent(seed) + "&backgroundColor=1b1730";
+const stripHtml = html => (html || "").replace(/<[^>]+>/g, "");
+
+function formatTimeLeft(ms) {
+  if (ms <= 0) return "closing...";
+  const totalMinutes = Math.floor(ms / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  if (hours >= 24) return Math.floor(hours / 24) + "d " + (hours % 24) + "h left";
+  if (hours > 0) return hours + "h " + (totalMinutes % 60) + "m left";
+  if (totalMinutes > 0) return totalMinutes + "m left";
+  return Math.ceil(ms / 1000) + "s left";
+}
+
+function timeAgo(timestamp) {
+  const minutes = Math.floor((Date.now() - timestamp) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return minutes + "m ago";
+  const hours = Math.floor(minutes / 60);
+  return hours < 24 ? hours + "h ago" : Math.floor(hours / 24) + "d ago";
+}
+
+/* localStorage can throw (private mode, blocked storage), so every call is wrapped. */
+const storage = {
+  load(key, fallback) {
+    try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+    catch (e) { return fallback; }
+  },
+  save(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {} },
+  remove(key) { try { localStorage.removeItem(key); } catch (e) {} }
+};
+
+
+/* =========================================================
+   4. API LAYER (axios)
+   One axios instance, one retry helper, one error translator.
+   Every page uses these so loading/error handling looks the same everywhere.
+   ========================================================= */
+
+const api = axios.create({ timeout: 12000 });
+
+const ENDPOINTS = {
+  posts:  "https://dummyjson.com/posts",   // fake REST API for the Wall (CRUD)
+  users:  "https://dummyjson.com/users",   // registration + username check
+  shows:  "https://api.tvmaze.com",        // third-party TV data for Discover
+  github: "https://api.github.com"         // GitHub profile viewer
+};
+
+// Only retry problems that might fix themselves: no network, server errors, rate limits.
+function isRetryable(err) {
+  if (axios.isCancel(err)) return false;
+  const status = err.response && err.response.status;
+  return !status || status >= 500 || status === 429;
+}
+
+// Try a request, and if it fails for a retryable reason wait and try again
+// (500ms, then 1000ms). This is called exponential backoff.
+async function withRetry(request, retries = 2, delay = 500) {
+  try {
+    return await request();
+  } catch (err) {
+    if (retries <= 0 || !isRetryable(err)) throw err;
+    await sleep(delay);
+    return withRetry(request, retries - 1, delay * 2);
+  }
+}
+
+// Turn an axios error into a sentence a person can read.
+function errorMessage(err, custom = {}) {
+  if (!err) return "Something went wrong.";
+  const status = err.response && err.response.status;
+  if (status && custom[status]) return custom[status];
+  if (status === 404) return "We couldn't find that.";
+  if (status === 403 || status === 429) return "Too many requests. Give it a minute, then retry.";
+  if (status >= 500) return "The server is having a moment. Try again.";
+  if (err.code === "ECONNABORTED") return "That took too long. Check your connection.";
+  if (!status) return "Network error. Are you online?";
+  return err.message || "Something went wrong.";
+}
+
+async function fetchGithub(login) {
+  // Two requests at the same time; Promise.all waits for both.
+  const [profile, repos] = await Promise.all([
+    withRetry(() => api.get(ENDPOINTS.github + "/users/" + login)),
+    withRetry(() => api.get(ENDPOINTS.github + "/users/" + login + "/repos", { params: { sort: "updated", per_page: 6 } }))
+  ]);
+  return { profile: profile.data, repos: repos.data };
+}
+
+
+/* =========================================================
+   5. REDUX TOOLKIT STORE
+   Global state that many pages share lives here:
+     bets   — every bet, votes, reactions, results
+     wallet — your clout
+     feed   — the activity feed and ticker
+     wall   — posts loaded from the REST API (async thunks)
+   ========================================================= */
+
+const STORE_KEY = "bolbet-v2";
+
+function makeSeedBets() {
+  const now = Date.now();
+  return SEED_BETS.map(bet => ({
+    ...bet,
+    myVote: null, closed: false, winner: null, payout: 0,
+    reactions: { doubt: 0, hype: 0, shook: 0 },
+    createdAt: now - bet.id * 60000,
+    closesAt: now + bet.minutes * 60000
+  }));
+}
+
+/* ---- bets slice ---- */
+const betsSlice = createSlice({
+  name: "bets",
+  initialState: { items: makeSeedBets() },
+  reducers: {
+    // createSlice uses Immer, so "mutating" code here is turned into an immutable update.
+    voted(state, action) {
+      const { id, side } = action.payload;
+      const bet = state.items.find(b => b.id === id);
+      if (!bet || bet.myVote || bet.closed) return;
+      bet.myVote = side;
+      if (side === "A") bet.votesA++; else bet.votesB++;
+    },
+    reacted(state, action) {
+      const bet = state.items.find(b => b.id === action.payload.id);
+      if (bet) bet.reactions[action.payload.key]++;
+    },
+    betAdded: {
+      reducer(state, action) { state.items.push(action.payload); },
+      // prepare() builds the payload. Random ids and Date.now() belong here,
+      // not in the reducer, because reducers must be pure.
+      prepare({ question, optionA, optionB, category, hours }) {
+        const now = Date.now();
+        return { payload: {
+          id: nanoid(), question, optionA, optionB, category,
+          votesA: 0, votesB: 0, myVote: null, closed: false, winner: null, payout: 0,
+          reactions: { doubt: 0, hype: 0, shook: 0 },
+          createdAt: now, closesAt: now + hours * 3600000, mine: true
+        } };
+      }
+    },
+    betDeleted(state, action) {
+      state.items = state.items.filter(b => b.id !== action.payload);
+    },
+    betResolved: {
+      reducer(state, action) {
+        const { id, upset, winAmount, lossAmount } = action.payload;
+        const bet = state.items.find(b => b.id === id);
+        if (!bet || bet.closed) return;
+        bet.closed = true;
+        // The popular side usually wins, but 30% of the time it's an upset.
+        const popular = bet.votesA >= bet.votesB ? "A" : "B";
+        bet.winner = upset ? (popular === "A" ? "B" : "A") : popular;
+        if (bet.myVote) bet.payout = bet.myVote === bet.winner ? winAmount : -lossAmount;
+      },
+      prepare(id) {
+        return { payload: {
+          id, upset: Math.random() < 0.3,
+          winAmount: 20 + Math.floor(Math.random() * 40),
+          lossAmount: 10 + Math.floor(Math.random() * 15)
+        } };
+      }
+    }
+  }
+});
+const { voted, reacted, betAdded, betDeleted, betResolved } = betsSlice.actions;
+
+/* ---- wallet slice ---- */
+const walletSlice = createSlice({
+  name: "wallet",
+  initialState: { clout: 1240 },
+  reducers: {
+    cloutChanged(state, action) { state.clout += action.payload; }
+  },
+  // extraReducers lets this slice react to actions owned by ANOTHER slice.
+  extraReducers: builder => {
+    builder.addCase(voted, state => { state.clout += 10; });
+  }
+});
+const { cloutChanged } = walletSlice.actions;
+
+/* ---- feed slice ---- */
+const feedSlice = createSlice({
+  name: "feed",
+  initialState: { items: INITIAL_FEED.map((f, i) => ({ id: "seed-" + i, ...f })) },
+  reducers: {
+    feedAdded: {
+      reducer(state, action) {
+        state.items.unshift(action.payload);
+        if (state.items.length > 12) state.items.pop();
+      },
+      prepare(text, highlight) { return { payload: { id: nanoid(), text, highlight } }; }
+    }
+  },
+  extraReducers: builder => {
+    builder.addCase(betAdded, (state, action) => {
+      state.items.unshift({ id: "bet-" + action.payload.id, text: 'New bet dropped: "' + shorten(action.payload.question) + '"' });
+      if (state.items.length > 12) state.items.pop();
+    });
+  }
+});
+const { feedAdded } = feedSlice.actions;
+
+/* ---- wall slice: CRUD against a REST API with createAsyncThunk ---- */
+const WALL_PAGE_SIZE = 6;
+
+function normalisePost(p) {
+  return {
+    id: p.id, title: p.title, body: p.body, tags: p.tags || [], userId: p.userId,
+    likes: typeof p.reactions === "object" && p.reactions ? p.reactions.likes : (p.reactions || 0),
+    liked: false, local: false
+  };
+}
+
+// READ (with pagination + search). "condition" skips the request if we already have that page.
+const fetchWall = createAsyncThunk(
+  "wall/fetch",
+  async ({ page = 1, query = "" }, { rejectWithValue }) => {
+    try {
+      const url = query ? ENDPOINTS.posts + "/search" : ENDPOINTS.posts;
+      const params = { limit: WALL_PAGE_SIZE, skip: (page - 1) * WALL_PAGE_SIZE };
+      if (query) params.q = query;
+      const res = await withRetry(() => api.get(url, { params }));
+      return { posts: res.data.posts.map(normalisePost), total: res.data.total };
+    } catch (err) {
+      return rejectWithValue(errorMessage(err));
+    }
+  },
+  {
+    condition({ page = 1, query = "", force }, { getState }) {
+      const wall = getState().wall;
+      const same = wall.page === page && wall.query === query;
+      if (!force && same && (wall.status === "loading" || wall.status === "succeeded")) return false;
+    }
+  }
+);
+
+// CREATE. DummyJSON pretends to save the post and returns an id, but never really
+// stores it, so we keep our own copy (with a local id) in Redux + localStorage.
+const createPost = createAsyncThunk("wall/create", async ({ title, body, author }, { rejectWithValue }) => {
+  try {
+    const res = await api.post(ENDPOINTS.posts + "/add", { title, body, userId: 1 });
+    return {
+      id: "local-" + res.data.id + "-" + nanoid(5), title: res.data.title, body: res.data.body,
+      tags: ["campus"], likes: 0, liked: false, local: true, author, createdAt: Date.now()
+    };
+  } catch (err) {
+    return rejectWithValue(errorMessage(err));
+  }
+});
+
+// UPDATE. Server posts get a real PUT; our own local posts skip the network.
+const updatePost = createAsyncThunk("wall/update", async ({ post, changes }, { rejectWithValue }) => {
+  try {
+    if (post.local) await sleep(300);
+    else await api.put(ENDPOINTS.posts + "/" + post.id, changes);
+    return { id: post.id, changes };
+  } catch (err) {
+    return rejectWithValue(errorMessage(err));
+  }
+});
+
+// DELETE
+const deletePost = createAsyncThunk("wall/delete", async (post, { rejectWithValue }) => {
+  try {
+    if (post.local) await sleep(300);
+    else await api.delete(ENDPOINTS.posts + "/" + post.id);
+    return post.id;
+  } catch (err) {
+    return rejectWithValue(errorMessage(err));
+  }
+});
+
+const wallInitial = {
+  items: [], mine: [], total: 0, page: 1, query: "",
+  status: "idle", error: null, lastRequestId: null, busyIds: [], creating: false
+};
+
+function findPost(state, id) {
+  return state.items.find(p => p.id === id) || state.mine.find(p => p.id === id);
+}
+function clearBusy(state, id) {
+  state.busyIds = state.busyIds.filter(x => x !== id);
+}
+
+const wallSlice = createSlice({
+  name: "wall",
+  initialState: wallInitial,
+  reducers: {
+    postLiked(state, action) {
+      const post = findPost(state, action.payload);
+      if (post) { post.liked = !post.liked; post.likes += post.liked ? 1 : -1; }
+    }
+  },
+  extraReducers: builder => {
+    builder
+      // Each async thunk dispatches pending -> fulfilled OR rejected.
+      .addCase(fetchWall.pending, (state, action) => {
+        state.status = "loading";
+        state.error = null;
+        state.page = action.meta.arg.page || 1;
+        state.query = action.meta.arg.query || "";
+        state.lastRequestId = action.meta.requestId;
+      })
+      .addCase(fetchWall.fulfilled, (state, action) => {
+        // Ignore answers to old requests (e.g. user typed again while this was loading).
+        if (action.meta.requestId !== state.lastRequestId) return;
+        state.status = "succeeded";
+        state.items = action.payload.posts;
+        state.total = action.payload.total;
+      })
+      .addCase(fetchWall.rejected, (state, action) => {
+        if (action.meta.requestId !== state.lastRequestId) return;
+        state.status = "failed";
+        state.error = action.payload || action.error.message;
+      })
+      .addCase(createPost.pending,   state => { state.creating = true; })
+      .addCase(createPost.fulfilled, (state, action) => { state.creating = false; state.mine.unshift(action.payload); })
+      .addCase(createPost.rejected,  state => { state.creating = false; })
+      .addCase(updatePost.pending,   (state, action) => { state.busyIds.push(action.meta.arg.post.id); })
+      .addCase(updatePost.fulfilled, (state, action) => {
+        clearBusy(state, action.payload.id);
+        const post = findPost(state, action.payload.id);
+        if (post) Object.assign(post, action.payload.changes, { edited: true });
+      })
+      .addCase(updatePost.rejected,  (state, action) => { clearBusy(state, action.meta.arg.post.id); })
+      .addCase(deletePost.pending,   (state, action) => { state.busyIds.push(action.meta.arg.id); })
+      .addCase(deletePost.fulfilled, (state, action) => {
+        clearBusy(state, action.payload);
+        state.items = state.items.filter(p => p.id !== action.payload);
+        state.mine = state.mine.filter(p => p.id !== action.payload);
+      })
+      .addCase(deletePost.rejected,  (state, action) => { clearBusy(state, action.meta.arg.id); });
+  }
+});
+const { postLiked } = wallSlice.actions;
+
+/* ---- thunks: logic that reads state and dispatches several actions ---- */
+function placeVote(id, side) {
+  return (dispatch, getState) => {
+    const bet = getState().bets.items.find(b => b.id === id);
+    if (!bet || bet.myVote || bet.closed) return false;   // you can only vote once
+    dispatch(voted({ id, side }));                         // walletSlice adds +10 itself
+    dispatch(feedAdded('You backed "' + shorten(bet.question) + '"', "+10 clout"));
+    return true;
+  };
+}
+
+function resolveExpiredBets() {
+  return (dispatch, getState) => {
+    const now = Date.now();
+    const payouts = [];
+    getState().bets.items
+      .filter(bet => !bet.closed && bet.closesAt <= now)
+      .forEach(bet => {
+        dispatch(betResolved(bet.id));
+        const after = getState().bets.items.find(b => b.id === bet.id);
+        if (after.myVote) {
+          dispatch(cloutChanged(after.payout));
+          dispatch(after.payout > 0
+            ? feedAdded("A bet resolved, you won", "+" + after.payout + " clout")
+            : feedAdded("A bet resolved, not everyone called it right"));
+          payouts.push(after.payout);
+        } else {
+          dispatch(feedAdded('"' + shorten(bet.question) + '" just resolved'));
+        }
+      });
+    return payouts;   // the App shows a toast for each of these
+  };
+}
+
+/* ---- middleware: records every action for the "Under the hood" page ---- */
+const actionLog = {
+  entries: [],
+  listeners: new Set(),
+  push(type) {
+    this.entries = [{ id: nanoid(), type, time: new Date().toLocaleTimeString() }, ...this.entries].slice(0, 30);
+    this.listeners.forEach(listener => listener());
+  }
+};
+const subscribeLog = listener => { actionLog.listeners.add(listener); return () => actionLog.listeners.delete(listener); };
+const getLog = () => actionLog.entries;
+
+const loggerMiddleware = () => next => action => {
+  const result = next(action);
+  if (action && action.type) actionLog.push(action.type);
+  return result;
+};
+
+/* ---- build the store, restoring anything saved last time ---- */
+function loadSavedState() {
+  const saved = storage.load(STORE_KEY, null);
+  if (!saved || !saved.bets || !Array.isArray(saved.bets.items)) return undefined;
+  return {
+    bets: saved.bets,
+    wallet: saved.wallet || { clout: 1240 },
+    feed: saved.feed || feedSlice.getInitialState(),
+    wall: { ...wallInitial, mine: saved.wallMine || [] }
+  };
+}
+
+const store = configureStore({
+  reducer: {
+    bets: betsSlice.reducer,
+    wallet: walletSlice.reducer,
+    feed: feedSlice.reducer,
+    wall: wallSlice.reducer
+  },
+  preloadedState: loadSavedState(),
+  middleware: getDefaultMiddleware => getDefaultMiddleware().concat(loggerMiddleware)
+});
+
+// Save to localStorage whenever the store changes (at most every 250ms).
+let saveTimer = null;
+let resetting = false;
+store.subscribe(() => {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    if (resetting) return;
+    const s = store.getState();
+    storage.save(STORE_KEY, { bets: s.bets, wallet: s.wallet, feed: s.feed, wallMine: s.wall.mine });
+  }, 250);
+});
+
+function resetProgress() {
+  resetting = true;
+  storage.remove(STORE_KEY);
+  location.reload();
+}
+
+/* ---- selectors: small functions that read one thing from the store ---- */
+const selectBets  = state => state.bets.items;
+const selectClout = state => state.wallet.clout;
+const selectFeed  = state => state.feed.items;
+const selectWall  = state => state.wall;
+
+
+/* =========================================================
+   6. CUSTOM HOOKS
+   ========================================================= */
+
+/* Waits until the value stops changing for `delay` ms. Used for search boxes
+   so we don't call an API on every key press. */
+function useDebounce(value, delay = 300) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);       // cancel if the value changes again first
+  }, [value, delay]);
+  return debounced;
+}
+
+/* useState that survives a page refresh. */
+function useLocalStorage(key, initialValue) {
+  const [value, setValue] = useState(() => storage.load(key, initialValue));
+  useEffect(() => { storage.save(key, value); }, [key, value]);
+  return [value, setValue];
+}
+
+/* One shared clock for every countdown on screen, using useSyncExternalStore.
+   Only one setInterval runs no matter how many bet cards are visible. */
+const clock = { now: Date.now(), listeners: new Set() };
+setInterval(() => { clock.now = Date.now(); clock.listeners.forEach(l => l()); }, 1000);
+const subscribeClock = l => { clock.listeners.add(l); return () => clock.listeners.delete(l); };
+const getNow = () => clock.now;
+function useNow() { return useSyncExternalStore(subscribeClock, getNow); }
+
+/* Live list of Redux actions from the logger middleware. */
+function useActionLog() { return useSyncExternalStore(subscribeLog, getLog); }
+
+/* Calls handler when you click outside `ref` (closes dropdowns). */
+function useClickOutside(ref, handler, active = true) {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+  useEffect(() => {
+    if (!active) return;
+    function onDown(e) { if (ref.current && !ref.current.contains(e.target)) handlerRef.current(e); }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+    };
+  }, [ref, active]);
+}
+
+/* A small form library: values, errors, touched fields and submit handling.
+   `validate` is a plain function that returns { fieldName: "error message" }. */
+function useForm({ initialValues, validate, onSubmit }) {
+  const [values, setValues] = useState(initialValues);
+  const [touched, setTouched] = useState({});
+  const [submitCount, setSubmitCount] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+
+  const errors = useMemo(() => validate(values), [values, validate]);
+  const isValid = Object.keys(errors).length === 0;
+
+  // Only show an error once the field was left (blur) or the user tried to submit.
+  function showError(name) {
+    return touched[name] || submitCount > 0 ? errors[name] : undefined;
+  }
+  function handleChange(e) {
+    const { name, value, type, checked } = e.target;
+    setValues(v => ({ ...v, [name]: type === "checkbox" ? checked : value }));
+  }
+  function handleBlur(e) {
+    const name = e.target.name;
+    setTouched(t => ({ ...t, [name]: true }));
+  }
+  function setFieldValue(name, value) {
+    setValues(v => ({ ...v, [name]: value }));
+    setTouched(t => ({ ...t, [name]: true }));
+  }
+  async function handleSubmit(e) {
+    if (e) e.preventDefault();
+    setSubmitCount(c => c + 1);
+    if (!isValid || submitting) return;
+    setSubmitting(true);
+    try { await onSubmit(values); }
+    finally { setSubmitting(false); }
+  }
+  function reset(next) {
+    setValues(next || initialValues);
+    setTouched({});
+    setSubmitCount(0);
+  }
+
+  return { values, errors, isValid, submitting, showError, handleChange, handleBlur, handleSubmit, setFieldValue, reset };
+}
+
+/* Runs any promise and tracks its loading / success / error state, with retry. */
+function useAsync() {
+  const [state, setState] = useState({ status: "idle", data: null, error: null });
+  const last = useRef(null);
+  const run = useCallback(async (factory, messages) => {
+    last.current = { factory, messages };
+    setState(s => ({ ...s, status: "loading", error: null }));
+    try {
+      const data = await factory();
+      setState({ status: "success", data, error: null });
+      return data;
+    } catch (err) {
+      setState({ status: "error", data: null, error: errorMessage(err, messages) });
+    }
+  }, []);
+  const retry = useCallback(() => {
+    if (last.current) run(last.current.factory, last.current.messages);
+  }, [run]);
+  return { ...state, run, retry };
+}
+
+/* Async validation: is this username free? Asks DummyJSON after you stop typing. */
+function useUsernameCheck(username, enabled) {
+  const debounced = useDebounce(username, 500);
+  const [result, setResult] = useState({ status: "idle", for: "" });
+
+  useEffect(() => {
+    if (!enabled || !debounced) { setResult({ status: "idle", for: "" }); return; }
+    if (TAKEN_USERNAMES.includes(debounced)) { setResult({ status: "taken", for: debounced }); return; }
+    const controller = new AbortController();
+    setResult({ status: "checking", for: debounced });
+    api.get(ENDPOINTS.users + "/filter", { params: { key: "username", value: debounced }, signal: controller.signal })
+      .then(res => setResult({ status: res.data.total > 0 ? "taken" : "available", for: debounced }))
+      .catch(err => { if (!axios.isCancel(err)) setResult({ status: "unknown", for: debounced }); });
+    return () => controller.abort();          // cancel the old request if the name changes
+  }, [debounced, enabled]);
+
+  if (!enabled || !username) return "idle";
+  return result.for === username ? result.status : "checking";
+}
+
+/* Search TVMaze. Each new query cancels the previous request with AbortController. */
+function useShowSearch(query) {
+  const [state, setState] = useState({ status: "idle", data: [], error: null });
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!query) { setState({ status: "idle", data: [], error: null }); return; }
+    const controller = new AbortController();
+    setState(s => ({ ...s, status: "loading", error: null }));
+    withRetry(() => api.get(ENDPOINTS.shows + "/search/shows", { params: { q: query }, signal: controller.signal }))
+      .then(res => setState({ status: "success", data: res.data.map(r => r.show), error: null }))
+      .catch(err => {
+        if (axios.isCancel(err)) return;
+        setState({ status: "error", data: [], error: errorMessage(err) });
+      });
+    return () => controller.abort();
+  }, [query, attempt]);
+
+  return { ...state, retry: () => setAttempt(a => a + 1) };
+}
+
+/* Browse TVMaze page by page (250 shows per API page), revealing 12 at a time.
+   useReducer keeps the related bits of state changing together. */
+const BROWSE_CHUNK = 12;
+const browseInitial = { items: [], visible: 0, apiPage: 0, status: "idle", error: null, hasMore: true };
+
+function browseReducer(state, action) {
+  switch (action.type) {
+    case "reveal":  return { ...state, visible: Math.min(state.visible + BROWSE_CHUNK, state.items.length) };
+    case "loading": return { ...state, status: "loading", error: null };
+    case "loaded": {
+      const items = state.items.concat(action.shows);
+      return { ...state, items, status: "idle", apiPage: state.apiPage + 1,
+               visible: Math.min(state.visible + BROWSE_CHUNK, items.length) };
+    }
+    case "end":     return { ...state, status: "idle", hasMore: false };
+    case "error":   return { ...state, status: "error", error: action.error };
+    default:        return state;
+  }
+}
+
+function useShowBrowser() {
+  const [state, send] = useReducer(browseReducer, browseInitial);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  const loadMore = useCallback(async () => {
+    const s = stateRef.current;
+    if (s.status === "loading" || s.status === "error") return;
+    if (s.visible < s.items.length) { send({ type: "reveal" }); return; }   // still have some in memory
+    if (!s.hasMore) return;
+    stateRef.current = { ...s, status: "loading" };                          // block double calls
+    send({ type: "loading" });
+    try {
+      const res = await withRetry(() => api.get(ENDPOINTS.shows + "/shows", { params: { page: s.apiPage } }));
+      send({ type: "loaded", shows: res.data.filter(show => show.image) });
+    } catch (err) {
+      if (err.response && err.response.status === 404) send({ type: "end" });   // no more pages
+      else send({ type: "error", error: errorMessage(err) });
+    }
+  }, []);
+
+  const retry = useCallback(() => {
+    stateRef.current = { ...stateRef.current, status: "idle" };
+    loadMore();
+  }, [loadMore]);
+
+  return { ...state, loadMore, retry };
+}
+
+/* Infinite scroll: watches an invisible div at the bottom of the list with
+   IntersectionObserver and calls onLoadMore when it comes into view. */
+function useInfiniteScroll(onLoadMore, enabled, deps) {
+  const sentinelRef = useRef(null);
+  const onScreen = useRef(false);
+  const callback = useRef(onLoadMore);
+  callback.current = onLoadMore;
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !enabled) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      onScreen.current = entry.isIntersecting;
+      if (entry.isIntersecting) callback.current();
+    }, { rootMargin: "300px" });
+    observer.observe(el);
+    return () => { observer.disconnect(); onScreen.current = false; };
+  }, [enabled]);
+
+  // If the list is still too short to push the sentinel off screen, keep loading.
+  useEffect(() => {
+    if (!enabled || !onScreen.current) return;
+    const timer = setTimeout(() => callback.current(), 150);
+    return () => clearTimeout(timer);
+  }, deps); // eslint-disable-line
+
+  return sentinelRef;
+}
+
+
+/* =========================================================
+   7. CONTEXT PROVIDERS
+   Context is for app-wide things that aren't "data": who is logged in,
+   sound on/off, the toast popup, and the new-bet composer.
+   ========================================================= */
+
+/* ---- Settings (sound) ---- */
+const SettingsContext = createContext(null);
+const useSettings = () => useContext(SettingsContext);
+
+function SettingsProvider({ children }) {
+  const [soundOn, setSoundOn] = useLocalStorage("bolbet-sound", true);
+  const audioRef = useRef(null);
+
+  // A short beep made by the browser itself, so we need no sound files.
+  const play = useCallback(frequency => {
+    if (!soundOn) return;
+    try {
+      if (!audioRef.current) audioRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      const audio = audioRef.current;
+      const wave = audio.createOscillator();
+      const volume = audio.createGain();
+      wave.frequency.value = frequency;
+      volume.gain.value = 0.05;
+      wave.connect(volume);
+      volume.connect(audio.destination);
+      wave.start();
+      wave.stop(audio.currentTime + 0.12);
+    } catch (e) { /* browsers may block sound until the first click */ }
+  }, [soundOn]);
+
+  const toggleSound = useCallback(() => setSoundOn(on => !on), [setSoundOn]);
+  const value = useMemo(() => ({ soundOn, toggleSound, play }), [soundOn, toggleSound, play]);
+  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
+}
+
+/* ---- Toasts ---- */
+const ToastContext = createContext(null);
+const useToast = () => useContext(ToastContext);
+
+function ToastProvider({ children }) {
+  const [toasts, setToasts] = useState([]);
+  const dismiss = useCallback(id => setToasts(list => list.filter(t => t.id !== id)), []);
+  const toast = useCallback((message, type = "success") => {
+    const id = nanoid();
+    setToasts(list => [...list.slice(-2), { id, message, type }]);   // keep max 3 on screen
+    setTimeout(() => dismiss(id), 2600);
+  }, [dismiss]);
+
+  return (
+    <ToastContext.Provider value={toast}>
+      {children}
+      <div className="toasts" role="status" aria-live="polite">
+        {toasts.map(t => (
+          <div key={t.id} className={"toast " + t.type} onClick={() => dismiss(t.id)}>{t.message}</div>
+        ))}
+      </div>
+    </ToastContext.Provider>
+  );
+}
+
+/* ---- Auth (the registered user) ---- */
+const AuthContext = createContext(null);
+const useAuth = () => useContext(AuthContext);
+
+function AuthProvider({ children }) {
+  const [user, setUser] = useLocalStorage("bolbet-user", null);
+  const register   = useCallback(data => setUser(data), [setUser]);
+  const logout     = useCallback(() => setUser(null), [setUser]);
+  const linkGithub = useCallback(login => setUser(u => (u ? { ...u, github: login } : u)), [setUser]);
+  const value = useMemo(() => ({ user, register, logout, linkGithub }), [user, register, logout, linkGithub]);
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+/* ---- Bet composer: any page can open the "new bet" modal, optionally pre-filled ---- */
+const ComposerContext = createContext(null);
+const useComposer = () => useContext(ComposerContext);
+
+function ComposerProvider({ children }) {
+  const [state, setState] = useState({ open: false, prefill: null });
+  const openComposer  = useCallback((prefill = null) => setState({ open: true, prefill }), []);
+  const closeComposer = useCallback(() => setState(s => ({ ...s, open: false })), []);
+  return (
+    <ComposerContext.Provider value={openComposer}>
+      {children}
+      <NewBetModal open={state.open} prefill={state.prefill} onClose={closeComposer} />
+    </ComposerContext.Provider>
+  );
+}
+
+
+/* =========================================================
+   8. ROUTER
+   A tiny hash router: #/bets?cat=Sports -> path "bets", query cat=Sports.
+   Hash URLs work when the file is opened straight from disk.
+   ========================================================= */
+
+function parseHash() {
+  const raw = window.location.hash.replace(/^#\/?/, "");
+  const [path, qs] = raw.split("?");
+  return { path: path || "home", query: new URLSearchParams(qs || "") };
+}
+
+function useHashRoute() {
+  const [hash, setHash] = useState(window.location.hash);
+  useEffect(() => {
+    const onChange = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", onChange);
+    return () => window.removeEventListener("hashchange", onChange);
+  }, []);
+  const route = useMemo(parseHash, [hash]);
+
+  // Jump to the top only when the page changes, not when a filter in the URL changes.
+  const lastPath = useRef(route.path);
+  useEffect(() => {
+    if (lastPath.current !== route.path) { window.scrollTo(0, 0); lastPath.current = route.path; }
+  }, [route.path]);
+  return route;
+}
+
+function navigate(to) { window.location.hash = "/" + to; }
+
+function Link({ to, children, ...rest }) {
+  return <a href={"#/" + to} {...rest}>{children}</a>;
+}
+
+
+/* =========================================================
+   9. REUSABLE UI COMPONENTS
+   ========================================================= */
+
+function Modal({ open, onClose, title, hint, width = 440, center, children }) {
+  const boxRef = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = e => { if (e.key === "Escape") closeRef.current(); };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";                  // stop the page scrolling behind
+    const first = boxRef.current && boxRef.current.querySelector("input, textarea, select");
+    if (first) first.focus();
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+  }, [open]);
+
+  if (!open) return null;
+  // A portal renders the modal at the end of <body>, outside the page layout.
+  return ReactDOM.createPortal(
+    <div className="overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal" ref={boxRef} role="dialog" aria-modal="true" aria-label={title}
+           style={{ maxWidth: width, textAlign: center ? "center" : undefined }}>
+        <h3>{title}</h3>
+        {hint && <p className="hint">{hint}</p>}
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function Tabs({ tabs, active, onChange }) {
+  return (
+    <div className="chips" role="tablist">
+      {tabs.map(tab => (
+        <button key={tab.id} type="button" role="tab" aria-selected={active === tab.id}
+                className={"chip" + (active === tab.id ? " active" : "")} onClick={() => onChange(tab.id)}>
+          {tab.label}
+          {tab.count != null && <span className="count-badge">{tab.count}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Dropdown({ label, items, value, onSelect, align = "left", buttonClass = "dropdown-btn", showValue = true }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useClickOutside(ref, () => setOpen(false), open);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = e => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const current = items.find(item => item.value === value);
+  return (
+    <div className="dropdown" ref={ref}>
+      <button type="button" className={buttonClass} aria-haspopup="menu" aria-expanded={open}
+              onClick={() => setOpen(o => !o)}>
+        {showValue && label && <small>{label}</small>}
+        {showValue && current ? current.label : label}
+        <Icon name="chevron" size={14} />
+      </button>
+      {open && (
+        <div className={"dropdown-menu " + align} role="menu">
+          {items.map(item => (
+            <button key={item.value} type="button" role="menuitem"
+                    className={"dropdown-item" + (item.value === value ? " selected" : "")}
+                    onClick={() => { setOpen(false); onSelect(item.value); }}>
+              {item.label}
+              {item.value === value && <Icon name="check" size={14} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Pagination({ page, totalPages, onChange }) {
+  if (totalPages <= 1) return null;
+  const start = Math.max(1, Math.min(page - 2, totalPages - 4));
+  const end = Math.min(totalPages, start + 4);
+  const pages = [];
+  for (let p = start; p <= end; p++) pages.push(p);
+
+  return (
+    <nav className="pagination" aria-label="Pagination">
+      <button className="page-btn" disabled={page === 1} onClick={() => onChange(page - 1)} aria-label="Previous page">‹</button>
+      {start > 1 && <button className="page-btn" onClick={() => onChange(1)}>1</button>}
+      {start > 2 && <span className="dots">…</span>}
+      {pages.map(p => (
+        <button key={p} className={"page-btn" + (p === page ? " active" : "")} aria-current={p === page ? "page" : undefined}
+                onClick={() => onChange(p)}>{p}</button>
+      ))}
+      {end < totalPages - 1 && <span className="dots">…</span>}
+      {end < totalPages && <button className="page-btn" onClick={() => onChange(totalPages)}>{totalPages}</button>}
+      <button className="page-btn" disabled={page === totalPages} onClick={() => onChange(page + 1)} aria-label="Next page">›</button>
+    </nav>
+  );
+}
+
+function ErrorState({ message, onRetry, title = "That didn't work" }) {
+  return (
+    <div className="state-box error" role="alert">
+      <h4>{title}</h4>
+      <p>{message}</p>
+      {onRetry && <button className="btn" onClick={onRetry}><Icon name="refresh" size={16} /> Try again</button>}
+    </div>
+  );
+}
+
+function EmptyState({ title, children }) {
+  return <div className="state-box"><h4>{title}</h4>{children}</div>;
+}
+
+function Skeletons({ count = 6, height = 200 }) {
+  return Array.from({ length: count }, (_, i) => <div key={i} className="skeleton" style={{ minHeight: height }} />);
+}
+
+function Section({ title, subtitle, action, children }) {
+  return (
+    <section className="section">
+      <div className="wrap">
+        <div className="section-head">
+          <div><h2>{title}</h2>{subtitle && <p className="subtitle">{subtitle}</p>}</div>
+          {action}
+        </div>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function SearchBox({ value, onChange, placeholder, pending }) {
+  return (
+    <div className="search-wrap">
+      <Icon name="search" size={17} />
+      <input type="search" value={value} placeholder={placeholder} aria-label={placeholder}
+             onChange={e => onChange(e.target.value)} />
+      {pending && <span className="typing">typing…</span>}
+    </div>
+  );
+}
+
+/* Error boundary: if a page crashes, show a message instead of a blank screen.
+   (Error boundaries must still be class components.) */
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <Section title="Something broke">
+          <ErrorState message={String(this.state.error.message || this.state.error)}
+                      onRetry={() => this.setState({ error: null })} />
+        </Section>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+
+/* =========================================================
+   10. REUSABLE FORM INPUTS
+   Every input takes the `form` object from useForm, so wiring a new field
+   is one line: <TextInput form={form} name="email" label="Email" />
+   ========================================================= */
+
+function Field({ label, htmlFor, required, error, hint, hintOk, children }) {
+  return (
+    <div className={"field" + (error ? " has-error" : "")}>
+      {label && <label htmlFor={htmlFor}>{label}{required && <span className="req">*</span>}</label>}
+      {children}
+      {error
+        ? <p className="field-error" role="alert">{error}</p>
+        : hint ? <p className={"field-hint" + (hintOk ? " ok" : "")}>{hint}</p> : null}
+    </div>
+  );
+}
+
+function TextInput({ form, name, label, hint, hintOk, required, counter, type = "text", error, ...rest }) {
+  const shownError = error || form.showError(name);
+  const length = String(form.values[name] || "").length;
+  const finalHint = hint || (counter && rest.maxLength ? length + " / " + rest.maxLength : null);
+  return (
+    <Field label={label} htmlFor={name} required={required} error={shownError} hint={finalHint} hintOk={hintOk}>
+      <input id={name} name={name} type={type} className="input" value={form.values[name]}
+             onChange={form.handleChange} onBlur={form.handleBlur} aria-invalid={!!shownError} {...rest} />
+    </Field>
+  );
+}
+
+function TextArea({ form, name, label, required, maxLength, ...rest }) {
+  const error = form.showError(name);
+  return (
+    <Field label={label} htmlFor={name} required={required} error={error}
+           hint={maxLength ? form.values[name].length + " / " + maxLength : null}>
+      <textarea id={name} name={name} className="input" value={form.values[name]} maxLength={maxLength}
+                onChange={form.handleChange} onBlur={form.handleBlur} aria-invalid={!!error} {...rest} />
+    </Field>
+  );
+}
+
+function SelectInput({ form, name, label, options, required, placeholder }) {
+  const error = form.showError(name);
+  const list = options.map(o => (typeof o === "string" ? { value: o, label: o } : o));
+  return (
+    <Field label={label} htmlFor={name} required={required} error={error}>
+      <select id={name} name={name} className="input" value={form.values[name]}
+              onChange={form.handleChange} onBlur={form.handleBlur} aria-invalid={!!error}>
+        {placeholder && <option value="">{placeholder}</option>}
+        {list.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </Field>
+  );
+}
+
+function PasswordInput({ form, name, label, required, showMeter, ...rest }) {
+  const [visible, setVisible] = useState(false);       // local state: only this input cares
+  const error = form.showError(name);
+  const score = passwordScore(form.values[name]);
+  const colours = ["var(--pink)", "var(--pink)", "var(--orange)", "var(--cyan)", "var(--lime)"];
+  const words = ["Too weak", "Weak", "Okay", "Strong", "Very strong"];
+  return (
+    <Field label={label} htmlFor={name} required={required} error={error}
+           hint={showMeter && form.values[name] ? "Strength: " + words[score] : null}>
+      <div className="input-row">
+        <input id={name} name={name} type={visible ? "text" : "password"} className="input"
+               value={form.values[name]} onChange={form.handleChange} onBlur={form.handleBlur}
+               aria-invalid={!!error} style={{ paddingRight: 70 }} {...rest} />
+        <button type="button" className="peek" onClick={() => setVisible(v => !v)}>{visible ? "Hide" : "Show"}</button>
+      </div>
+      {showMeter && (
+        <div className="strength" aria-hidden="true">
+          {[1, 2, 3, 4].map(i => <span key={i} style={{ background: i <= score ? colours[score] : undefined }} />)}
+        </div>
+      )}
+    </Field>
+  );
+}
+
+function Checkbox({ form, name, label }) {
+  return (
+    <Field error={form.showError(name)}>
+      <label className="check">
+        <input type="checkbox" name={name} checked={form.values[name]} onChange={form.handleChange} onBlur={form.handleBlur} />
+        <span>{label}</span>
+      </label>
+    </Field>
+  );
+}
+
+function CheckboxGroup({ form, name, label, options, required }) {
+  const selected = form.values[name];
+  function toggle(option) {
+    form.setFieldValue(name, selected.includes(option) ? selected.filter(o => o !== option) : [...selected, option]);
+  }
+  return (
+    <Field label={label} required={required} error={form.showError(name)}>
+      <div className="pill-group" role="group" aria-label={label}>
+        {options.map(option => (
+          <label key={option} className={"pill-check" + (selected.includes(option) ? " on" : "")}>
+            <input type="checkbox" checked={selected.includes(option)} onChange={() => toggle(option)} />
+            {option}
+          </label>
+        ))}
+      </div>
+    </Field>
+  );
+}
+
+
+/* =========================================================
+   11. BET CARD, SHARE CARD, NEW BET MODAL
+   ========================================================= */
+
+function OptionButton({ side, label, percent, showBars, picked, won, disabled, onClick }) {
+  return (
+    <button className={"option " + side.toLowerCase() + (picked ? " picked" : "") + (won ? " won" : "")}
+            disabled={disabled} onClick={onClick}>
+      <span className="bar" style={{ width: (showBars ? percent : 0) + "%" }} />
+      <span className="inner">
+        <span>{label}</span>
+        <span className="percent">{showBars ? percent + "%" : ""}</span>
+      </span>
+    </button>
+  );
+}
+
+function BetCard({ bet }) {
+  const dispatch = useDispatch();
+  const toast = useToast();
+  const { play } = useSettings();
+  const now = useNow();
+  const [sharing, setSharing] = useState(false);
+
+  const total = totalVotes(bet);
+  const percentA = total === 0 ? 50 : Math.round(bet.votesA / total * 100);
+  const showBars = bet.myVote !== null || bet.closed;    // percentages appear after you vote
+  const msLeft = bet.closesAt - now;
+
+  function handleVote(side) {
+    if (dispatch(placeVote(bet.id, side))) { play(560); toast("Vote placed, +10 clout"); }
+  }
+  function handleDelete() {
+    if (window.confirm("Delete this bet?")) { dispatch(betDeleted(bet.id)); toast("Bet deleted", "info"); }
+  }
+
+  let footRight = "Pick a side";
+  if (bet.closed && bet.myVote) {
+    footRight = bet.payout > 0
+      ? <span className="result win">You won +{bet.payout} clout</span>
+      : <span className="result loss">You lost {Math.abs(bet.payout)} clout</span>;
+  } else if (bet.closed) {
+    footRight = "Closed";
+  } else if (bet.myVote) {
+    footRight = "You picked " + (bet.myVote === "A" ? bet.optionA : bet.optionB);
+  }
+
+  return (
+    <article className="bet">
+      <div className="bet-top">
+        <span className="category">{bet.category}</span>
+        <span className={"timer" + (bet.closed || msLeft < 3600000 ? " soon" : "")}>
+          {bet.closed ? "CLOSED" : formatTimeLeft(msLeft)}
+        </span>
+      </div>
+      <Icon name={CATEGORY_ICON[bet.category] || "dice"} size={28} color={CATEGORY_COLOUR[bet.category]} />
+      <div className="question">{bet.question}</div>
+
+      <OptionButton side="A" label={bet.optionA} percent={percentA} showBars={showBars}
+                    picked={bet.myVote === "A"} won={bet.winner === "A"} disabled={showBars} onClick={() => handleVote("A")} />
+      <OptionButton side="B" label={bet.optionB} percent={100 - percentA} showBars={showBars}
+                    picked={bet.myVote === "B"} won={bet.winner === "B"} disabled={showBars} onClick={() => handleVote("B")} />
+
+      <div className="bet-foot"><span>{total} votes</span><span>{footRight}</span></div>
+
+      <div className="reactions">
+        {[["doubt", "Doubt", "skull"], ["hype", "Hype", "flame"], ["shook", "Shook", "bolt"]].map(([key, text, icon]) => (
+          <button key={key} className="react" aria-label={text} title={text}
+                  onClick={() => { dispatch(reacted({ id: bet.id, key })); play(880); }}>
+            <Icon name={icon} size={14} /> {bet.reactions[key]}
+          </button>
+        ))}
+        {bet.myVote && (
+          <button className="react push-right" onClick={() => setSharing(true)}><Icon name="share" size={14} /> Share</button>
+        )}
+        {bet.mine && (
+          <button className={"react danger" + (bet.myVote ? "" : " push-right")} onClick={handleDelete} aria-label="Delete bet">
+            <Icon name="trash" size={14} />
+          </button>
+        )}
+      </div>
+
+      <ShareModal bet={bet} open={sharing} onClose={() => setSharing(false)} />
+    </article>
+  );
+}
+
+/* Canvas can't wrap text by itself, so we add words until the line is too wide. */
+function drawWrappedText(pen, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(" ");
+  let line = "";
+  for (let i = 0; i < words.length; i++) {
+    const testLine = line + words[i] + " ";
+    if (pen.measureText(testLine).width > maxWidth && i > 0) {
+      pen.fillText(line, x, y);
+      line = words[i] + " ";
+      y += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  pen.fillText(line, x, y);
+  return y;
+}
+
+function drawShareCard(canvas, bet, handle) {
+  const pen = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  pen.fillStyle = "#141026"; pen.fillRect(0, 0, W, H);
+  pen.fillStyle = "rgba(255,62,160,.25)"; pen.beginPath(); pen.arc(W - 60, 60, 150, 0, Math.PI * 2); pen.fill();
+  pen.fillStyle = "#c6ff3d"; pen.font = "bold 38px Arial"; pen.fillText("BOLBET", 40, 70);
+  pen.fillStyle = "#a79fc4"; pen.font = "bold 16px Arial"; pen.fillText(bet.category.toUpperCase(), 40, 108);
+  pen.fillStyle = "#f6f3ff"; pen.font = "bold 28px Arial";
+  const y = drawWrappedText(pen, bet.question, 40, 170, 520, 36);
+  pen.fillStyle = "#a79fc4"; pen.font = "bold 18px Arial"; pen.fillText(handle ? handle.toUpperCase() + "'S CALL" : "YOUR CALL", 40, y + 60);
+  pen.fillStyle = "#c6ff3d"; pen.font = "bold 26px Arial"; pen.fillText(bet.myVote === "A" ? bet.optionA : bet.optionB, 40, y + 96);
+
+  let resultText = "IN PLAY", resultColour = "#3ed9ff";
+  if (bet.closed) {
+    if (bet.payout > 0) { resultText = "WON +" + bet.payout + " CLOUT"; resultColour = "#c6ff3d"; }
+    else { resultText = "LOST " + Math.abs(bet.payout) + " CLOUT"; resultColour = "#ff3ea0"; }
+  }
+  pen.fillStyle = resultColour; pen.font = "bold 28px Arial"; pen.fillText(resultText, 40, H - 90);
+  pen.fillStyle = "#a79fc4"; pen.font = "16px Arial"; pen.fillText("No real money, just clout.", 40, H - 40);
+}
+
+function ShareModal({ bet, open, onClose }) {
+  const canvasRef = useRef(null);
+  const { user } = useAuth();
+  useEffect(() => {
+    if (open && canvasRef.current) drawShareCard(canvasRef.current, bet, user ? "@" + user.username : null);
+  }, [open, bet, user]);
+
+  function download() {
+    const link = document.createElement("a");
+    link.download = "bolbet.png";
+    link.href = canvasRef.current.toDataURL();
+    link.click();
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Share your call" hint="Screenshot ready." width={360} center>
+      <canvas ref={canvasRef} id="shareCanvas" width="600" height="700" />
+      <div className="modal-buttons">
+        <button className="btn-outline" onClick={onClose}>Close</button>
+        <button className="btn" onClick={download}>Download</button>
+      </div>
+    </Modal>
+  );
+}
+
+const BET_DEFAULTS = { question: "", optionA: "", optionB: "", category: "Campus Drama", hours: "24" };
+
+function validateBet(v) {
+  const errors = {};
+  const question = v.question.trim();
+  if (!question) errors.question = "Ask something.";
+  else if (question.length < 10) errors.question = "Too short, use at least 10 characters.";
+  else if (!question.endsWith("?")) errors.question = "Make it a question (end it with ?).";
+  if (!v.optionA.trim()) errors.optionA = "Option A can't be empty.";
+  if (!v.optionB.trim()) errors.optionB = "Option B can't be empty.";
+  else if (v.optionA.trim().toLowerCase() === v.optionB.trim().toLowerCase()) errors.optionB = "Both sides can't say the same thing.";
+  return errors;
+}
+
+function NewBetModal({ open, prefill, onClose }) {
+  const dispatch = useDispatch();
+  const toast = useToast();
+  const { play } = useSettings();
+
+  const form = useForm({
+    initialValues: BET_DEFAULTS,
+    validate: validateBet,
+    onSubmit: async values => {
+      dispatch(betAdded({
+        question: values.question.trim(), optionA: values.optionA.trim(), optionB: values.optionB.trim(),
+        category: values.category, hours: Number(values.hours)
+      }));
+      toast("Bet posted");
+      play(660);
+      onClose();
+      navigate("bets?sort=newest");
+    }
+  });
+
+  // Every time the modal opens, start from the defaults plus any pre-filled values.
+  useEffect(() => {
+    if (open) form.reset({ ...BET_DEFAULTS, ...(prefill || {}) });
+  }, [open, prefill]); // eslint-disable-line
+
+  return (
+    <Modal open={open} onClose={onClose} title="Drop a bet" hint="Make it juicy. Vague bets get ignored.">
+      <form onSubmit={form.handleSubmit} noValidate>
+        <TextInput form={form} name="question" label="The question" required counter maxLength={90}
+                   placeholder="Will Raj actually show up on time?" />
+        <div className="form-grid">
+          <TextInput form={form} name="optionA" label="Option A" required maxLength={30} placeholder="Yes, miracles happen" />
+          <TextInput form={form} name="optionB" label="Option B" required maxLength={30} placeholder="No, lost cause" />
+          <SelectInput form={form} name="category" label="Category" options={CATEGORIES.slice(1)} />
+          <SelectInput form={form} name="hours" label="Closes in" options={DURATIONS} />
+        </div>
+        <div className="modal-buttons">
+          <button type="button" className="btn-outline" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn">Post bet</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+
+/* =========================================================
+   12. PAGES
+   ========================================================= */
+
+/* ---------- HOME ---------- */
+function HomePage() {
+  const bets = useSelector(selectBets);
+  const clout = useSelector(selectClout);
+  const feed = useSelector(selectFeed);
+  const openComposer = useComposer();
+  const { user } = useAuth();
+  const [openFaq, setOpenFaq] = useState(null);
+
+  const trending = useMemo(() => {
+    const open = bets.filter(b => !b.closed);
+    return [...(open.length ? open : bets)].sort(byVotes).slice(0, 3);
+  }, [bets]);
+  const allVotes = useMemo(() => bets.reduce((sum, b) => sum + totalVotes(b), 0), [bets]);
+
+  const features = [
+    { icon: "cross", colour: "var(--pink)",   title: "Zero real money, ever", text: "You wager clout, not rupees. Nobody's card gets charged." },
+    { icon: "bolt",  colour: "var(--lime)",   title: "Bets actually resolve", text: "Every bet closes and pays clout to whoever called it right." },
+    { icon: "tv",    colour: "var(--orange)", title: "Bet on any TV show",    text: "Search real shows on Discover and turn them into bets in one click." },
+    { icon: "chat",  colour: "var(--cyan)",   title: "The Wall",              text: "Post hot takes, edit them, delete them. Full CRUD, campus style." }
+  ];
+
+  return (
+    <>
+      <section className="hero">
+        <div className="blob blob1" /><div className="blob blob2" />
+        <span className="hero-tag">{user ? "Welcome back, @" + user.username : "Live on campus right now"}</span>
+        <h1>
+          <span className="line">STOP SCROLLING.</span>
+          <span className="line"><span className="pink">START</span> <span className="lime">PREDICTING.</span></span>
+        </h1>
+        <p>The unofficial betting app for chaotic dorm life. Zero real money, infinite clout.
+           Call your shots on campus drama, situationships, exams and vibes, then flex the receipts.</p>
+        <div className="hero-buttons">
+          <Link to="bets" className="btn">Browse bets</Link>
+          {user ? <Link to="discover" className="btn-outline">Bet on a show</Link>
+                : <Link to="join" className="btn-outline">Join free, +100 clout</Link>}
+        </div>
+        <div className="stickers">
+          <span className="sticker" style={{ color: "var(--lime)" }}>Zero real money</span>
+          <span className="sticker" style={{ color: "var(--pink)" }}>Pure bragging rights</span>
+          <span className="sticker" style={{ color: "var(--cyan)" }}>Bets resolve for real</span>
+          <span className="sticker" style={{ color: "var(--orange)" }}>New: live TV bets</span>
+        </div>
+        <div className="avatars">
+          {["meera", "arjun", "simran", "kabir", "priya"].map(seed => <img key={seed} src={avatarUrl(seed)} alt="" />)}
+          <span>+750 students already calling their shots</span>
+        </div>
+        <div className="stats">
+          <div className="stat"><b>{bets.filter(b => !b.closed).length}</b><span>Live bets</span></div>
+          <div className="stat"><b>{allVotes.toLocaleString()}</b><span>Total votes</span></div>
+          <div className="stat"><b>{clout.toLocaleString()}</b><span>Your clout</span></div>
+        </div>
+      </section>
+
+      <div className="ticker" aria-hidden="true">
+        <div className="ticker-track">
+          {[...feed, ...feed].map((f, i) => (
+            <span key={i}>+ {f.text} {f.highlight && <b>{f.highlight}</b>}</span>
+          ))}
+        </div>
+      </div>
+
+      <Section title="Trending right now" subtitle="The bets everyone is fighting about today."
+               action={<Link to="bets" className="btn-outline btn-sm">See all</Link>}>
+        <div className="grid">{trending.map(bet => <BetCard key={bet.id} bet={bet} />)}</div>
+      </Section>
+
+      <Section title="Why Bolbet" subtitle="Everything the finance-bro apps won't tell you.">
+        <div className="grid">
+          {features.map(f => (
+            <div className="card" key={f.title}>
+              <Icon name={f.icon} color={f.colour} />
+              <h4>{f.title}</h4><p>{f.text}</p>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Browse by vibe" subtitle="Pick a category and see what's live.">
+        <div className="grid">
+          {CATEGORIES.slice(1).map(name => (
+            <Link key={name} to={"bets?cat=" + encodeURIComponent(name)} className="tile">
+              <Icon name={CATEGORY_ICON[name]} color={CATEGORY_COLOUR[name]} />
+              <div className="name">{name}</div>
+              <div className="count">{bets.filter(b => b.category === name && !b.closed).length} live bets</div>
+            </Link>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="What's popping" subtitle="Recent activity straight off the board.">
+        <div className="list-box">
+          {feed.slice(0, 6).map(f => (
+            <div className="row" key={f.id}>
+              <Icon name="bolt" size={15} color="var(--lime)" />
+              <div className="text">{f.text} {f.highlight && <b>{f.highlight}</b>}</div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Fresh off the board" subtitle="What people say after cashing out in clout.">
+        <div className="grid">
+          {TESTIMONIALS.map(t => (
+            <div className="card quote" key={t.name}>
+              <div className="top">
+                <img src={avatarUrl(t.seed)} alt="" />
+                <div><div className="who">{t.name}</div><div className="role">{t.role}</div></div>
+              </div>
+              <p>{t.text}</p>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Quick questions" subtitle="The stuff people ask before jumping in.">
+        {FAQS.map((faq, i) => (
+          <div className="faq" key={faq.q}>
+            <button className="q" aria-expanded={openFaq === i} onClick={() => setOpenFaq(openFaq === i ? null : i)}>
+              <span>{faq.q}</span><span className="sign">{openFaq === i ? "−" : "+"}</span>
+            </button>
+            {openFaq === i && <div className="a">{faq.a}</div>}
+          </div>
+        ))}
+      </Section>
+
+      <section className="section">
+        <div className="wrap">
+          <div className="banner">
+            <h2>Got a hot take?</h2>
+            <p>Drop your own bet and see if campus agrees with you. Takes ten seconds.</p>
+            <button className="btn" onClick={() => openComposer()}>+ Post a bet</button>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+/* ---------- BETS (search + filter + sort + pagination) ---------- */
+const BET_SORTS = [
+  { value: "trending", label: "Trending" }, { value: "closing", label: "Closing soon" },
+  { value: "newest", label: "Newest" }, { value: "split", label: "Most divided" }
+];
+const BET_STATUS = [
+  { value: "all", label: "Everything" }, { value: "open", label: "Open only" },
+  { value: "voted", label: "I voted" }, { value: "closed", label: "Closed" }
+];
+const BETS_PER_PAGE = 6;
+
+function BetsPage({ query }) {
+  const bets = useSelector(selectBets);
+  const openComposer = useComposer();
+
+  // The category lives in the URL (#/bets?cat=Sports) so tiles on Home can link to it.
+  const category = CATEGORIES.includes(query.get("cat")) ? query.get("cat") : "All";
+  const [search, setSearch] = useState("");
+  const debounced = useDebounce(search.trim().toLowerCase(), 300);
+  const [sortBy, setSortBy] = useState(query.get("sort") || "trending");
+  const [status, setStatus] = useState("all");
+
+  // Derived state: when any filter changes the "key" changes and we're back on page 1,
+  // without needing an extra useEffect.
+  const filterKey = [category, debounced, sortBy, status].join("|");
+  const [paging, setPaging] = useState({ key: filterKey, page: 1 });
+  const page = paging.key === filterKey ? paging.page : 1;
+
+  const list = useMemo(() => {
+    const result = bets.filter(bet => {
+      if (category !== "All" && bet.category !== category) return false;
+      if (status === "open" && bet.closed) return false;
+      if (status === "closed" && !bet.closed) return false;
+      if (status === "voted" && !bet.myVote) return false;
+      if (!debounced) return true;
+      const haystack = (bet.question + " " + bet.optionA + " " + bet.optionB + " " + bet.category).toLowerCase();
+      return haystack.includes(debounced);
+    });
+    const split = b => Math.abs(50 - (totalVotes(b) ? b.votesA / totalVotes(b) * 100 : 50));
+    if (sortBy === "closing") result.sort((x, y) => (x.closed - y.closed) || (x.closesAt - y.closesAt));
+    else if (sortBy === "newest") result.sort((x, y) => y.createdAt - x.createdAt);
+    else if (sortBy === "split") result.sort((x, y) => split(x) - split(y));
+    else result.sort(byVotes);
+    return result;
+  }, [bets, category, debounced, sortBy, status]);
+
+  const totalPages = Math.max(1, Math.ceil(list.length / BETS_PER_PAGE));
+  const safePage = Math.min(page, totalPages);
+  const visible = list.slice((safePage - 1) * BETS_PER_PAGE, safePage * BETS_PER_PAGE);
+
+  function goToPage(p) { setPaging({ key: filterKey, page: p }); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  function chooseCategory(cat) { navigate(cat === "All" ? "bets" : "bets?cat=" + encodeURIComponent(cat)); }
+
+  return (
+    <Section title="The board" subtitle="Pick a side. You can't un-vote, so choose wisely."
+             action={<button className="btn" onClick={() => openComposer(category !== "All" ? { category } : null)}>+ New Bet</button>}>
+      <div className="filters">
+        <SearchBox value={search} onChange={setSearch} placeholder="Search bets... 'wifi', 'quiz', 'drama'"
+                   pending={search.trim().toLowerCase() !== debounced} />
+        <Dropdown label="Show" items={BET_STATUS} value={status} onSelect={setStatus} align="right" />
+        <Dropdown label="Sort" items={BET_SORTS} value={sortBy} onSelect={setSortBy} align="right" />
+      </div>
+
+      <div className="chips">
+        {CATEGORIES.map(cat => (
+          <button key={cat} className={"chip" + (cat === category ? " active" : "")} onClick={() => chooseCategory(cat)}>{cat}</button>
+        ))}
+      </div>
+
+      {list.length > 0 && (
+        <p className="result-meta">
+          Showing {(safePage - 1) * BETS_PER_PAGE + 1}–{Math.min(safePage * BETS_PER_PAGE, list.length)} of {list.length} bets
+        </p>
+      )}
+
+      <div className="grid">
+        {visible.length === 0
+          ? <EmptyState title="No bets match that">Try another search, category or filter.</EmptyState>
+          : visible.map(bet => <BetCard key={bet.id} bet={bet} />)}
+      </div>
+
+      <Pagination page={safePage} totalPages={totalPages} onChange={goToPage} />
+    </Section>
+  );
+}
+
+/* ---------- DISCOVER (TVMaze: debounced search + infinite scroll) ---------- */
+const GENRES = ["All", "Drama", "Comedy", "Thriller", "Romance", "Science-Fiction", "Action", "Crime", "Horror"];
+const SHOW_SORTS = [
+  { value: "default", label: "Best match" }, { value: "rating", label: "Top rated" },
+  { value: "newest", label: "Newest" }, { value: "name", label: "A to Z" }
+];
+
+function ShowCard({ show }) {
+  const openComposer = useComposer();
+  const year = show.premiered ? show.premiered.slice(0, 4) : "—";
+  const rating = show.rating && show.rating.average;
+  const running = show.status === "Running";
+  const name = shorten(show.name, 45);
+
+  function makeBet() {
+    openComposer(running
+      ? { question: "Will " + name + " get another season?", optionA: "Renewed, easy", optionB: "Cancelled, RIP", category: "Pop Culture", hours: "72" }
+      : { question: "Is " + name + " worth a full rewatch?", optionA: "Peak TV, yes", optionB: "Leave it in the past", category: "Pop Culture", hours: "24" });
+  }
+
+  return (
+    <article className="show">
+      {show.image
+        ? <img src={show.image.medium} alt={show.name + " poster"} loading="lazy" />
+        : <div className="no-img"><Icon name="tv" size={30} /></div>}
+      <div>
+        <h4>{show.name}</h4>
+        <div className="meta">
+          {year} · {rating ? "★ " + rating : "no rating"} · <span className={running ? "running" : "ended"}>{show.status}</span>
+        </div>
+        <div className="tag-row">{(show.genres || []).slice(0, 3).map(g => <span className="tag" key={g}>{g}</span>)}</div>
+        {show.summary && <p className="summary">{stripHtml(show.summary)}</p>}
+        <div className="show-actions">
+          <button className="btn btn-sm" onClick={makeBet}>Bet on it</button>
+          <a className="btn-outline btn-sm" href={show.url} target="_blank" rel="noopener noreferrer">
+            Details <Icon name="external" size={13} />
+          </a>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function DiscoverPage() {
+  const [input, setInput] = useState("");
+  const query = useDebounce(input.trim(), 450);
+  const searching = query.length > 0;
+  const search = useShowSearch(query);
+  const browser = useShowBrowser();
+  const [genre, setGenre] = useState("All");
+  const [sortBy, setSortBy] = useState("default");
+
+  const source = searching ? search.data : browser.items.slice(0, browser.visible);
+  const shows = useMemo(() => {
+    let list = genre === "All" ? source : source.filter(s => (s.genres || []).includes(genre));
+    const rate = s => (s.rating && s.rating.average) || 0;
+    if (sortBy === "rating") list = [...list].sort((a, b) => rate(b) - rate(a));
+    else if (sortBy === "newest") list = [...list].sort((a, b) => (b.premiered || "").localeCompare(a.premiered || ""));
+    else if (sortBy === "name") list = [...list].sort((a, b) => a.name.localeCompare(b.name));
+    return list;
+  }, [source, genre, sortBy]);
+
+  const scrollEnabled = !searching && browser.hasMore && browser.status !== "error";
+  const sentinelRef = useInfiniteScroll(browser.loadMore, scrollEnabled,
+                                        [browser.visible, browser.items.length, browser.status, genre]);
+
+  let body;
+  if (searching) {
+    if (search.status === "loading") body = <Skeletons count={6} height={170} />;
+    else if (search.status === "error") body = <ErrorState message={search.error} onRetry={search.retry} />;
+    else if (shows.length === 0) body = <EmptyState title={'Nothing for "' + query + '"'}>Check the spelling or try another genre.</EmptyState>;
+    else body = shows.map(show => <ShowCard key={show.id} show={show} />);
+  } else if (browser.items.length === 0 && browser.status !== "error") {
+    body = <Skeletons count={6} height={170} />;
+  } else {
+    body = shows.map(show => <ShowCard key={show.id} show={show} />);
+  }
+
+  return (
+    <Section title="Discover" subtitle="Search any TV show and turn it into a bet. Scroll forever, we'll keep loading.">
+      <div className="filters">
+        <SearchBox value={input} onChange={setInput} placeholder="Search shows... 'friends', 'kota', 'office'"
+                   pending={input.trim() !== query} />
+        <Dropdown label="Genre" items={GENRES.map(g => ({ value: g, label: g }))} value={genre} onSelect={setGenre} align="right" />
+        <Dropdown label="Sort" items={SHOW_SORTS} value={sortBy} onSelect={setSortBy} align="right" />
+      </div>
+      {searching && search.status === "success" && (
+        <p className="result-meta">{shows.length} result{shows.length === 1 ? "" : "s"} for "{query}"</p>
+      )}
+
+      <div className="grid">{body}</div>
+
+      {!searching && (
+        <>
+          {browser.status === "loading" && browser.items.length > 0 && (
+            <div className="load-row"><span className="spinner" /> Loading more shows…</div>
+          )}
+          {browser.status === "error" && (
+            <div className="grid" style={{ marginTop: 18 }}>
+              <ErrorState title="Couldn't load more shows" message={browser.error} onRetry={browser.retry} />
+            </div>
+          )}
+          {scrollEnabled && <div ref={sentinelRef} className="sentinel" />}
+          {!browser.hasMore && <div className="load-row">That's every show. You've reached the end.</div>}
+        </>
+      )}
+      <p className="credit">TV data from <a href="https://www.tvmaze.com/api" target="_blank" rel="noopener noreferrer">TVMaze</a> (CC BY-SA).</p>
+    </Section>
+  );
+}
+
+/* ---------- WALL (CRUD with Redux async thunks + server pagination) ---------- */
+function validatePost(v) {
+  const errors = {};
+  const title = v.title.trim(), body = v.body.trim();
+  if (!title) errors.title = "Give it a headline.";
+  else if (title.length < 5) errors.title = "At least 5 characters.";
+  if (!body) errors.body = "Say what you actually think.";
+  else if (body.length < 10) errors.body = "At least 10 characters.";
+  return errors;
+}
+
+function EditPostModal({ post, onClose }) {
+  const dispatch = useDispatch();
+  const toast = useToast();
+  const form = useForm({
+    initialValues: { title: post ? post.title : "", body: post ? post.body : "" },
+    validate: validatePost,
+    onSubmit: async values => {
+      try {
+        await dispatch(updatePost({ post, changes: { title: values.title.trim(), body: values.body.trim() } })).unwrap();
+        toast("Post updated");
+        onClose();
+      } catch (message) {
+        toast(typeof message === "string" ? message : "Couldn't save that", "error");
+      }
+    }
+  });
+  return (
+    <Modal open={!!post} onClose={onClose} title="Edit your take" width={520}>
+      <form onSubmit={form.handleSubmit} noValidate>
+        <TextInput form={form} name="title" label="Headline" required maxLength={80} counter />
+        <TextArea form={form} name="body" label="Your take" required maxLength={280} />
+        <div className="modal-buttons">
+          <button type="button" className="btn-outline" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn" disabled={form.submitting}>
+            {form.submitting ? <><span className="spinner" /> Saving</> : "Save changes"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function PostCard({ post, busy, onEdit }) {
+  const dispatch = useDispatch();
+  const toast = useToast();
+  const author = post.local ? post.author : "Student #" + post.userId;
+  const seed = post.local ? post.author : "student" + post.userId;
+
+  async function handleDelete() {
+    if (!window.confirm("Delete this post?")) return;
+    try {
+      await dispatch(deletePost(post)).unwrap();
+      toast("Post deleted", "info");
+    } catch (message) {
+      toast(typeof message === "string" ? message : "Couldn't delete that", "error");
+    }
+  }
+
+  return (
+    <article className={"post" + (post.local ? " mine" : "") + (busy ? " busy" : "")}>
+      <div className="post-head">
+        <img src={avatarUrl(seed)} alt="" />
+        <div>
+          <div className="who">{author}</div>
+          <div className="when">{post.local ? timeAgo(post.createdAt) : "from the archive"}{post.edited ? " · edited" : ""}</div>
+        </div>
+        {busy && <span className="spinner push-right" style={{ color: "var(--lime)" }} />}
+      </div>
+      <h4>{post.title}</h4>
+      <p>{post.body}</p>
+      {post.tags.length > 0 && <div className="tag-row">{post.tags.map(t => <span className="tag" key={t}>#{t}</span>)}</div>}
+      <div className="post-actions">
+        <button className={"react" + (post.liked ? " liked" : "")} onClick={() => dispatch(postLiked(post.id))} aria-pressed={post.liked}>
+          <Icon name="heart" size={14} /> {post.likes}
+        </button>
+        <button className="react push-right" onClick={() => onEdit(post)}><Icon name="edit" size={14} /> Edit</button>
+        <button className="react danger" onClick={handleDelete} aria-label="Delete post"><Icon name="trash" size={14} /></button>
+      </div>
+    </article>
+  );
+}
+
+function WallPage() {
+  const dispatch = useDispatch();
+  const toast = useToast();
+  const { user } = useAuth();
+  const wall = useSelector(selectWall);
+  const [search, setSearch] = useState("");
+  const query = useDebounce(search.trim(), 400);
+  const [paging, setPaging] = useState({ query: "", page: 1 });
+  const page = paging.query === query ? paging.page : 1;
+  const [editing, setEditing] = useState(null);
+
+  // Fetch whenever the page or search changes. The thunk's "condition" skips
+  // the request if Redux already holds that exact page.
+  useEffect(() => { dispatch(fetchWall({ page, query })); }, [dispatch, page, query]);
+
+  const form = useForm({
+    initialValues: { title: "", body: "" },
+    validate: validatePost,
+    onSubmit: async values => {
+      try {
+        await dispatch(createPost({
+          title: values.title.trim(), body: values.body.trim(), author: user ? "@" + user.username : "Guest"
+        })).unwrap();
+        toast("Hot take posted");
+        form.reset();
+        if (search) setSearch("");
+      } catch (message) {
+        toast(typeof message === "string" ? message : "Couldn't post that", "error");
+      }
+    }
+  });
+
+  const showMine = page === 1 && !query;
+  const posts = (showMine ? wall.mine : []).concat(wall.items);
+  const totalPages = Math.max(1, Math.ceil(wall.total / WALL_PAGE_SIZE));
+
+  function goToPage(p) { setPaging({ query, page: p }); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  const retry = () => dispatch(fetchWall({ page, query, force: true }));
+
+  let list;
+  if (wall.status === "loading" || wall.status === "idle") list = <Skeletons count={4} height={180} />;
+  else if (wall.status === "failed") list = <ErrorState message={wall.error} onRetry={retry} />;
+  else if (posts.length === 0) list = <EmptyState title="Nothing here yet">{query ? "No posts match that search." : "Be the first to post."}</EmptyState>;
+  else list = posts.map(post => (
+    <PostCard key={post.id} post={post} busy={wall.busyIds.includes(post.id)} onEdit={setEditing} />
+  ));
+
+  return (
+    <Section title="The Wall" subtitle="Hot takes from around campus. Post, edit, delete, repeat.">
+      <div className="two-col">
+        <div className="form-card sticky">
+          <h3 style={{ fontSize: 20, marginBottom: 14 }}>Drop a hot take</h3>
+          <form onSubmit={form.handleSubmit} noValidate>
+            <TextInput form={form} name="title" label="Headline" required maxLength={80} counter
+                       placeholder="The library is the new club" />
+            <TextArea form={form} name="body" label="Your take" required maxLength={280}
+                      placeholder="Hear me out..." />
+            <button type="submit" className="btn" style={{ width: "100%" }} disabled={wall.creating}>
+              {wall.creating ? <><span className="spinner" /> Posting</> : "Post it"}
+            </button>
+          </form>
+          <p className="field-hint" style={{ marginTop: 12 }}>
+            Posting as {user ? "@" + user.username : "Guest"}. {!user && <Link to="join" style={{ textDecoration: "underline" }}>Join</Link>}
+          </p>
+        </div>
+
+        <div>
+          <div className="filters">
+            <SearchBox value={search} onChange={setSearch} placeholder="Search the wall..." pending={search.trim() !== query} />
+            <button className="btn-outline" onClick={retry} aria-label="Refresh"><Icon name="refresh" size={16} /></button>
+          </div>
+          {wall.status === "succeeded" && (
+            <p className="result-meta">
+              Page {page} of {totalPages} · {wall.total} posts{query ? ' matching "' + query + '"' : ""}
+            </p>
+          )}
+          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>{list}</div>
+          {wall.status === "succeeded" && <Pagination page={page} totalPages={totalPages} onChange={goToPage} />}
+        </div>
+      </div>
+      <EditPostModal key={editing ? editing.id : "none"} post={editing} onClose={() => setEditing(null)} />
+      <p className="credit">Posts from <a href="https://dummyjson.com" target="_blank" rel="noopener noreferrer">DummyJSON</a>, a practice REST API.</p>
+    </Section>
+  );
+}
+
+/* ---------- LEADERBOARD ---------- */
+function LeaderboardPage() {
+  const [tab, setTab] = useState("weekly");
+  const { user } = useAuth();
+  const clout = useSelector(selectClout);
+
+  const rows = useMemo(() => {
+    const list = LEADERBOARDS[tab].map(p => ({ ...p }));
+    if (user && tab === "weekly") {
+      list.push({ name: user.fullName.split(" ")[0] + " (you)", role: "@" + user.username, clout, seed: user.avatar, me: true });
+    }
+    return list.sort((a, b) => b.clout - a.clout);
+  }, [tab, user, clout]);
+
+  return (
+    <Section title="Clout leaderboard" subtitle="These legends called it right more often than not.">
+      <Tabs tabs={[{ id: "weekly", label: "This week" }, { id: "alltime", label: "All time" }]} active={tab} onChange={setTab} />
+      <div className="list-box">
+        {rows.map((p, i) => (
+          <div className={"row" + (p.me ? " me" : "")} key={p.name}>
+            <span className={"rank" + (i === 0 ? " top" : "")}>#{i + 1}</span>
+            <img src={avatarUrl(p.seed)} alt="" />
+            <div className="grow"><div className="name">{p.name}</div><div className="role">{p.role}</div></div>
+            <span className="score">{p.clout.toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+      {!user && <p className="credit"><Link to="join" style={{ textDecoration: "underline" }}>Join</Link> to see yourself on the weekly board.</p>}
+    </Section>
+  );
+}
+
+/* ---------- PROFILE (tabs: badges, bets, created, GitHub) ---------- */
+const GH_USER_RE = /^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$/;
+function validateGithub(v) {
+  const name = v.username.trim();
+  if (!name) return { username: "Enter a GitHub username." };
+  if (!GH_USER_RE.test(name)) return { username: "That isn't a valid GitHub username." };
+  return {};
+}
+
+function GithubViewer() {
+  const { user, linkGithub } = useAuth();
+  const toast = useToast();
+  const gh = useAsync();
+  const messages = { 404: "No GitHub user goes by that name." };
+
+  const form = useForm({
+    initialValues: { username: (user && user.github) || "" },
+    validate: validateGithub,
+    onSubmit: async values => { await gh.run(() => fetchGithub(values.username.trim()), messages); }
+  });
+
+  // Load the linked account once when the tab opens.
+  useEffect(() => {
+    if (user && user.github) gh.run(() => fetchGithub(user.github), messages);
+  }, []); // eslint-disable-line
+
+  const data = gh.data;
+  return (
+    <div>
+      <form onSubmit={form.handleSubmit} noValidate className="filters" style={{ alignItems: "flex-start" }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <TextInput form={form} name="username" placeholder="GitHub username, e.g. torvalds" aria-label="GitHub username" />
+        </div>
+        <button type="submit" className="btn" disabled={gh.status === "loading"}>
+          {gh.status === "loading" ? <><span className="spinner" /> Loading</> : "Look up"}
+        </button>
+      </form>
+
+      {gh.status === "idle" && <EmptyState title="Show off your dev cred">Look up any GitHub profile, then link your own to your Bolbet profile.</EmptyState>}
+      {gh.status === "loading" && <div className="grid"><Skeletons count={3} height={120} /></div>}
+      {gh.status === "error" && <div className="grid"><ErrorState message={gh.error} onRetry={gh.retry} /></div>}
+      {gh.status === "success" && data && (
+        <>
+          <div className="card gh">
+            <img src={data.profile.avatar_url} alt={data.profile.login} />
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <h3>{data.profile.name || data.profile.login}</h3>
+              <div className="handle">@{data.profile.login}{data.profile.location ? " · " + data.profile.location : ""}</div>
+              {data.profile.bio && <p className="bio">{data.profile.bio}</p>}
+              <div className="gh-stats">
+                <div><b>{data.profile.public_repos}</b><span>Repos</span></div>
+                <div><b>{data.profile.followers.toLocaleString()}</b><span>Followers</span></div>
+                <div><b>{data.profile.following}</b><span>Following</span></div>
+                <div><b>{data.profile.created_at.slice(0, 4)}</b><span>Joined</span></div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <a className="btn-outline btn-sm" href={data.profile.html_url} target="_blank" rel="noopener noreferrer">
+                GitHub <Icon name="external" size={13} />
+              </a>
+              {user && user.github !== data.profile.login && (
+                <button className="btn btn-sm" onClick={() => { linkGithub(data.profile.login); toast("GitHub linked"); }}>Link to my profile</button>
+              )}
+              {user && user.github === data.profile.login && <span className="status win">Linked</span>}
+            </div>
+          </div>
+          <h3 style={{ fontSize: 18, margin: "24px 0 14px" }}>Recently updated repos</h3>
+          <div className="grid">
+            {data.repos.length === 0 && <EmptyState title="No public repos yet" />}
+            {data.repos.map(repo => (
+              <a key={repo.id} className="card repo" href={repo.html_url} target="_blank" rel="noopener noreferrer">
+                <h4>{repo.name}<Icon name="external" size={14} /></h4>
+                <p>{repo.description || "No description."}</p>
+                <div className="lang"><span>{repo.language || "—"}</span><span>★ {repo.stargazers_count}</span><span>Forks {repo.forks_count}</span></div>
+              </a>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ProfilePage() {
+  const bets = useSelector(selectBets);
+  const clout = useSelector(selectClout);
+  const { user, logout } = useAuth();
+  const toast = useToast();
+  const [tab, setTab] = useState("badges");
+
+  const myBets = bets.filter(b => b.myVote);
+  const finished = myBets.filter(b => b.closed).sort((a, b) => b.closesAt - a.closesAt);
+  const wins = finished.filter(b => b.payout > 0);
+  const created = bets.filter(b => b.mine);
+
+  // Current streak = wins in a row, counting back from the most recent result.
+  let streak = 0;
+  for (const bet of finished) { if (bet.payout > 0) streak++; else break; }
+
+  function handleReset() {
+    if (window.confirm("Reset all your votes, clout and badges? Your account stays.")) resetProgress();
+  }
+  function handleLogout() {
+    logout();
+    toast("Logged out", "info");
+  }
+
+  return (
+    <Section title={user ? "Your profile" : "Guest profile"}>
+      <div className="profile">
+        <img src={avatarUrl(user ? user.avatar : "you")} alt="Your avatar" />
+        <div className="who">
+          <h3>{user ? user.fullName : "You"}</h3>
+          <p>{user ? "@" + user.username + " · " + user.college + ", " + user.year : "Guest bettor, joined this semester"}</p>
+          {user && user.interests.length > 0 && (
+            <div className="tag-row" style={{ marginTop: 8 }}>{user.interests.map(i => <span className="tag" key={i}>{i}</span>)}</div>
+          )}
+        </div>
+        <div className="numbers">
+          <div><b>{myBets.length}</b><span>Bets placed</span></div>
+          <div><b>{streak}</b><span>Streak</span></div>
+          <div><b>{finished.length ? Math.round(wins.length / finished.length * 100) + "%" : "-"}</b><span>Accuracy</span></div>
+          <div><b>{clout.toLocaleString()}</b><span>Clout</span></div>
+        </div>
+      </div>
+
+      {!user && (
+        <div className="card" style={{ marginBottom: 24, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+          <p style={{ flex: 1 }}>Make it official: pick a username, get 100 bonus clout and a spot on the leaderboard.</p>
+          <Link to="join" className="btn">Join Bolbet</Link>
+        </div>
+      )}
+
+      <Tabs active={tab} onChange={setTab} tabs={[
+        { id: "badges", label: "Badges" },
+        { id: "bets", label: "My calls", count: myBets.length },
+        { id: "created", label: "Bets I made", count: created.length },
+        { id: "github", label: "GitHub" }
+      ]} />
+
+      {tab === "badges" && (
+        <div className="badges">
+          {BADGES.map(badge => {
+            const unlocked = myBets.length >= badge.need;
+            return (
+              <div className={"badge" + (unlocked ? " unlocked" : "")} key={badge.title}>
+                <Icon name={badge.icon} color="var(--lime)" />
+                <div className="title">{badge.title}</div>
+                <div className="need">{unlocked ? "Unlocked" : badge.need + " bets to unlock"}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {tab === "bets" && (
+        myBets.length === 0
+          ? <EmptyState title="No calls yet"><Link to="bets" className="btn">Go vote on something</Link></EmptyState>
+          : myBets.map(bet => {
+              let text = "Open", cls = "";
+              if (bet.closed) {
+                if (bet.payout > 0) { text = "Won +" + bet.payout; cls = "win"; }
+                else { text = "Lost " + Math.abs(bet.payout); cls = "loss"; }
+              }
+              return (
+                <div className="my-bet" key={bet.id}>
+                  <span className="q">{bet.question}</span>
+                  <span className="pick">You: {bet.myVote === "A" ? bet.optionA : bet.optionB}</span>
+                  <span className={"status " + cls}>{text}</span>
+                </div>
+              );
+            })
+      )}
+
+      {tab === "created" && (
+        created.length === 0
+          ? <EmptyState title="You haven't posted a bet">Use the + New Bet button, or turn a TV show into one on Discover.</EmptyState>
+          : <div className="grid">{created.map(bet => <BetCard key={bet.id} bet={bet} />)}</div>
+      )}
+
+      {tab === "github" && <GithubViewer />}
+
+      <div style={{ display: "flex", gap: 20 }}>
+        <button className="link-btn" onClick={handleReset}>Reset my progress</button>
+        {user && <button className="link-btn" onClick={handleLogout}>Log out</button>}
+      </div>
+    </Section>
+  );
+}
+
+/* ---------- JOIN (registration form with full validation) ---------- */
+const JOIN_DEFAULTS = {
+  fullName: "", username: "", email: "", phone: "", college: "", year: "",
+  password: "", confirm: "", interests: [], avatar: AVATAR_SEEDS[0], terms: false
+};
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function passwordScore(password) {
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+  if (/\d/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+  return score;
+}
+
+function validateJoin(v) {
+  const e = {};
+  const name = v.fullName.trim();
+  if (!name) e.fullName = "We need your name.";
+  else if (name.length < 3) e.fullName = "At least 3 characters.";
+  else if (!/^[A-Za-z][A-Za-z .'-]*$/.test(name)) e.fullName = "Letters and spaces only.";
+
+  if (!v.username) e.username = "Pick a username.";
+  else if (!/^[a-z0-9_]{3,15}$/.test(v.username)) e.username = "3–15 characters: lowercase letters, numbers or _.";
+
+  if (!v.email.trim()) e.email = "Email is required.";
+  else if (!EMAIL_RE.test(v.email.trim())) e.email = "That email doesn't look right.";
+
+  if (v.phone.trim() && !/^[6-9]\d{9}$/.test(v.phone.trim())) e.phone = "Use a 10-digit Indian mobile number.";
+  if (!v.college) e.college = "Choose your college.";
+  if (!v.year) e.year = "Choose your year.";
+
+  if (!v.password) e.password = "Create a password.";
+  else if (v.password.length < 8) e.password = "At least 8 characters.";
+  else if (passwordScore(v.password) < 3) e.password = "Add upper and lower case, a number or a symbol.";
+
+  if (!v.confirm) e.confirm = "Type the password again.";
+  else if (v.confirm !== v.password) e.confirm = "Passwords don't match.";
+
+  if (v.interests.length < 2) e.interests = "Pick at least two vibes.";
+  if (!v.terms) e.terms = "You need to accept the house rules.";
+  return e;
+}
+
+function JoinPage() {
+  const { user, register, logout } = useAuth();
+  const dispatch = useDispatch();
+  const toast = useToast();
+  const { play } = useSettings();
+  const [serverError, setServerError] = useState(null);
+
+  const form = useForm({
+    initialValues: JOIN_DEFAULTS,
+    validate: validateJoin,
+    onSubmit: async v => {
+      if (usernameStatus === "taken") { toast("That username is taken", "error"); return; }
+      if (usernameStatus === "checking") { toast("Still checking that username…", "info"); return; }
+      setServerError(null);
+      try {
+        const [firstName, ...rest] = v.fullName.trim().split(/\s+/);
+        // A real POST to a practice API. We never send the password to a fake server.
+        const res = await withRetry(() => api.post(ENDPOINTS.users + "/add", {
+          firstName, lastName: rest.join(" "), username: v.username, email: v.email.trim()
+        }));
+        register({
+          id: res.data.id, fullName: v.fullName.trim(), username: v.username, email: v.email.trim(),
+          phone: v.phone.trim(), college: v.college, year: v.year, interests: v.interests,
+          avatar: v.avatar, github: "", joinedAt: Date.now()
+        });
+        dispatch(cloutChanged(100));
+        dispatch(feedAdded("@" + v.username + " just joined", "+100 welcome clout"));
+        toast("Welcome aboard, +100 clout");
+        play(880);
+        navigate("profile");
+      } catch (err) {
+        setServerError(errorMessage(err));
+      }
+    }
+  });
+
+  const formatError = form.errors.username;
+  const usernameStatus = useUsernameCheck(form.values.username, !formatError);
+  const usernameError = form.showError("username") || (usernameStatus === "taken" ? "Someone already has that one." : null);
+  const usernameHint = {
+    checking: "Checking if it's free…", available: "Nice, that one's free.",
+    unknown: "Couldn't check right now. You can still continue."
+  }[usernameStatus];
+
+  if (user) {
+    return (
+      <Section title="You're already in">
+        <div className="card" style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+          <img src={avatarUrl(user.avatar)} alt="" style={{ width: 64, height: 64, borderRadius: "50%" }} />
+          <div style={{ flex: 1 }}><h4>{user.fullName}</h4><p>Signed in as @{user.username}</p></div>
+          <Link to="profile" className="btn">Go to profile</Link>
+          <button className="btn-outline" onClick={() => { logout(); toast("Logged out", "info"); }}>Log out</button>
+        </div>
+      </Section>
+    );
+  }
+
+  const v = form.values;
+  return (
+    <Section title="Join Bolbet" subtitle="Ten fields between you and 100 free clout.">
+      <div className="two-col">
+        {/* Live preview: shows the form values as you type */}
+        <div className="form-card sticky" style={{ textAlign: "center" }}>
+          <img src={avatarUrl(v.avatar)} alt="" style={{ width: 96, height: 96, borderRadius: "50%", border: "3px solid var(--lime)" }} />
+          <h3 style={{ marginTop: 12 }}>{v.fullName.trim() || "Your name"}</h3>
+          <p className="field-hint" style={{ fontFamily: "Space Mono" }}>@{v.username || "username"}</p>
+          <p className="field-hint">{[v.college, v.year].filter(Boolean).join(", ") || "College, year"}</p>
+          <div className="tag-row" style={{ justifyContent: "center", marginTop: 12 }}>
+            {v.interests.map(i => <span className="tag" key={i}>{i}</span>)}
+          </div>
+          <div className="card" style={{ marginTop: 20, textAlign: "left" }}>
+            <h4>What you get</h4>
+            <p>+100 welcome clout, your name on the leaderboard, a profile with your GitHub, and posts under your own handle.</p>
+          </div>
+        </div>
+
+        <form className="form-card" onSubmit={form.handleSubmit} noValidate>
+          {serverError && <div className="server-error" role="alert">{serverError} Try again in a moment.</div>}
+
+          <Field label="Pick an avatar">
+            <div className="avatar-pick">
+              {AVATAR_SEEDS.map(seed => (
+                <button type="button" key={seed} className={v.avatar === seed ? "on" : ""} aria-label={"Avatar " + seed}
+                        aria-pressed={v.avatar === seed} onClick={() => form.setFieldValue("avatar", seed)}>
+                  <img src={avatarUrl(seed)} alt="" />
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          <div className="form-grid">
+            <TextInput form={form} name="fullName" label="Full name" required autoComplete="name" placeholder="Rajesh Kumar" />
+            <TextInput form={form} name="username" label="Username" required autoComplete="username" placeholder="chaos_king"
+                       error={usernameError} hint={usernameHint} hintOk={usernameStatus === "available"}
+                       onChange={e => form.setFieldValue("username", e.target.value.toLowerCase().replace(/\s/g, ""))} />
+            <TextInput form={form} name="email" label="Email" type="email" required autoComplete="email" placeholder="you@college.edu" />
+            <TextInput form={form} name="phone" label="Phone (optional)" type="tel" inputMode="numeric" maxLength={10}
+                       autoComplete="tel-national" placeholder="9876543210" />
+            <SelectInput form={form} name="college" label="College" required placeholder="Choose one" options={COLLEGES} />
+            <SelectInput form={form} name="year" label="Year" required placeholder="Choose one" options={YEARS} />
+            <PasswordInput form={form} name="password" label="Password" required showMeter autoComplete="new-password" />
+            <PasswordInput form={form} name="confirm" label="Confirm password" required autoComplete="new-password" />
+            <div className="span-2">
+              <CheckboxGroup form={form} name="interests" label="Your vibes" required options={CATEGORIES.slice(1)} />
+              <Checkbox form={form} name="terms" label="I promise this is just for fun and no real money is involved." />
+            </div>
+          </div>
+
+          <button type="submit" className="btn" style={{ width: "100%", padding: 14 }} disabled={form.submitting}>
+            {form.submitting ? <><span className="spinner" /> Creating your account</> : "Create account"}
+          </button>
+          {!form.isValid && Object.keys(form.errors).length > 0 && (
+            <p className="field-hint" style={{ textAlign: "center", marginTop: 10 }}>
+              {Object.keys(form.errors).length} field{Object.keys(form.errors).length === 1 ? "" : "s"} still need attention.
+            </p>
+          )}
+        </form>
+      </div>
+    </Section>
+  );
+}
+
+/* ---------- HOW IT WORKS ---------- */
+function HowPage() {
+  const steps = [
+    { icon: "eye", colour: "var(--lime)",   text: "Find a bet worth having an opinion on, or make one from a TV show." },
+    { icon: "aim", colour: "var(--pink)",   text: "Pick a side. Your clout backs the bet." },
+    { icon: "cup", colour: "var(--cyan)",   text: "When it closes, winners get paid in clout." },
+    { icon: "chat", colour: "var(--orange)", text: "Argue about it on the Wall. Edit your take when you're proven wrong." }
+  ];
+  return (
+    <Section title="How it works" subtitle="Four steps. No wallet needed.">
+      <div className="grid">
+        {steps.map(step => (
+          <div className="card" key={step.text}>
+            <Icon name={step.icon} color={step.colour} />
+            <div className="question" style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.35 }}>{step.text}</div>
+          </div>
+        ))}
+      </div>
+      <div className="hero-buttons" style={{ justifyContent: "flex-start" }}>
+        <Link to="join" className="btn">Join free</Link>
+        <Link to="lab" className="btn-outline">See how it's built</Link>
+      </div>
+    </Section>
+  );
+}
+
+/* ---------- UNDER THE HOOD (state architecture explained, live) ---------- */
+const HOOKS_USED = [
+  ["useHashRoute", "Reads #/page?query from the URL and re-renders on hashchange."],
+  ["useDebounce", "Waits until typing stops before searching (Bets, Discover, Wall, username check)."],
+  ["useLocalStorage", "useState that survives a refresh (sound setting, logged-in user)."],
+  ["useForm", "Values, touched fields, validation errors and submit for every form."],
+  ["useUsernameCheck", "Async validation: asks the API if a username is free, cancels stale requests."],
+  ["useAsync", "Loading / success / error / retry for one-off requests (GitHub viewer)."],
+  ["useShowSearch", "Searches TVMaze, cancels the previous request with AbortController."],
+  ["useShowBrowser", "useReducer-based paging through the TVMaze catalogue."],
+  ["useInfiniteScroll", "IntersectionObserver on a sentinel div to load more on scroll."],
+  ["useClickOutside", "Closes dropdowns when you click elsewhere."],
+  ["useNow", "One shared clock for every countdown, via useSyncExternalStore."],
+  ["useActionLog", "Subscribes to the Redux logger middleware (the Action log tab)."]
+];
+
+function LabPage() {
+  const [tab, setTab] = useState("arch");
+  const state = useSelector(s => s);
+  const log = useActionLog();
+  const { user } = useAuth();
+  const { soundOn } = useSettings();
+
+  const snapshot = {
+    bets: {
+      total: state.bets.items.length,
+      open: state.bets.items.filter(b => !b.closed).length,
+      votedByYou: state.bets.items.filter(b => b.myVote).length,
+      createdByYou: state.bets.items.filter(b => b.mine).length
+    },
+    wallet: state.wallet,
+    feed: { items: state.feed.items.length, latest: state.feed.items[0] && state.feed.items[0].text },
+    wall: {
+      status: state.wall.status, page: state.wall.page, query: state.wall.query, total: state.wall.total,
+      loadedPosts: state.wall.items.length, yourPosts: state.wall.mine.length, busyIds: state.wall.busyIds
+    }
+  };
+
+  const layers = [
+    { title: "Redux Toolkit (global, shared, saved)", colour: "var(--lime)", icon: "layers",
+      text: "bets, wallet, feed and wall slices. Many pages read and change them, so they live in one store. createAsyncThunk handles Wall CRUD; extraReducers let the wallet react to votes." },
+    { title: "Context API (app-wide services)", colour: "var(--cyan)", icon: "share",
+      text: "AuthContext (who is logged in), ToastContext (popups), SettingsContext (sound) and ComposerContext (open the new-bet modal from anywhere). Rarely changes, needed everywhere." },
+    { title: "Local useState (one component)", colour: "var(--pink)", icon: "aim",
+      text: "Search text, open tab, open dropdown, modal open/closed, show-password toggle. Nobody else needs it, so it stays local." },
+    { title: "Server cache (useReducer + hooks)", colour: "var(--orange)", icon: "tv",
+      text: "Discover's TV data is fetched data owned by TVMaze. It lives in custom hooks on that page and is thrown away when you leave." }
+  ];
+
+  return (
+    <Section title="Under the hood" subtitle="How state is organised in this app, with live data.">
+      <Tabs active={tab} onChange={setTab} tabs={[
+        { id: "arch", label: "Architecture" }, { id: "store", label: "Live store" },
+        { id: "log", label: "Action log", count: log.length }, { id: "hooks", label: "Hooks" }
+      ]} />
+
+      {tab === "arch" && (
+        <>
+          <div className="grid">
+            {layers.map(l => (
+              <div className="card" key={l.title}>
+                <Icon name={l.icon} color={l.colour} />
+                <h4>{l.title}</h4><p>{l.text}</p>
+              </div>
+            ))}
+          </div>
+          <div className="card" style={{ marginTop: 18 }}>
+            <h4>Rule of thumb</h4>
+            <p>Start with local state. Lift it to Context when many components need it but it rarely changes.
+               Move it to Redux when it changes often, many screens edit it, or you want to persist and debug it.</p>
+          </div>
+        </>
+      )}
+
+      {tab === "store" && (
+        <div className="grid">
+          <div><h4 style={{ marginBottom: 10 }}>Redux store</h4><pre className="code">{JSON.stringify(snapshot, null, 2)}</pre></div>
+          <div><h4 style={{ marginBottom: 10 }}>Context values</h4>
+            <pre className="code">{JSON.stringify({ auth: user ? { username: user.username, college: user.college, github: user.github || null } : null, settings: { soundOn } }, null, 2)}</pre>
+          </div>
+        </div>
+      )}
+
+      {tab === "log" && (
+        <div className="list-box">
+          {log.length === 0
+            ? <p style={{ padding: 16, color: "var(--text-dim)" }}>No actions yet. Vote on a bet or open the Wall, then come back.</p>
+            : log.map(entry => (
+                <div className="log-row" key={entry.id}><span className="t">{entry.time}</span><span className="type">{entry.type}</span></div>
+              ))}
+        </div>
+      )}
+
+      {tab === "hooks" && (
+        <div className="list-box">
+          <table className="hook-table"><tbody>
+            {HOOKS_USED.map(([name, text]) => <tr key={name}><td>{name}</td><td>{text}</td></tr>)}
+          </tbody></table>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function NotFoundPage() {
+  return (
+    <Section title="Page not found">
+      <EmptyState title="That page doesn't exist">
+        <Link to="home" className="btn">Back home</Link>
+      </EmptyState>
+    </Section>
+  );
+}
+
+
+/* =========================================================
+   13. NAVBAR, FOOTER, APP, ROUTES
+   ========================================================= */
+
+const NAV = [
+  { to: "home", label: "Home" }, { to: "bets", label: "Bets" }, { to: "discover", label: "Discover" },
+  { to: "wall", label: "Wall" }, { to: "leaderboard", label: "Leaderboard" }
+];
+const MORE = [
+  { value: "profile", label: "Profile" }, { value: "join", label: "Join / Register" },
+  { value: "how", label: "How it works" }, { value: "lab", label: "Under the hood" }
+];
+
+function Navbar({ path }) {
+  const clout = useSelector(selectClout);
+  const { soundOn, toggleSound } = useSettings();
+  const openComposer = useComposer();
+  const { user } = useAuth();
+  const moreActive = MORE.some(m => m.value === path);
+
+  return (
+    <nav className="top">
+      <div className="nav-inner">
+        <Link to="home" className="logo">BOL<span>BET</span></Link>
+        <div className="nav-links">
+          {NAV.map(n => <Link key={n.to} to={n.to} className={path === n.to ? "active" : ""}>{n.label}</Link>)}
+          <Dropdown label="More" items={MORE} value={moreActive ? path : null} onSelect={navigate}
+                    showValue={false} buttonClass={"nav-more" + (moreActive ? " active" : "")} />
+        </div>
+        <div className="nav-right">
+          <button className="btn-outline btn-sm" onClick={toggleSound}>Sound: {soundOn ? "On" : "Off"}</button>
+          <div className="clout-pill">Clout: <b>{clout.toLocaleString()}</b></div>
+          <button className="btn" onClick={() => openComposer()}>+ New Bet</button>
+          {user
+            ? <Link to="profile" className="user-chip"><img src={avatarUrl(user.avatar)} alt="" />@{user.username}</Link>
+            : <Link to="join" className="btn-outline">Join</Link>}
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+function Footer() {
+  return (
+    <footer>
+      <div className="name">BOL<span>BET</span></div>
+      <p>No real money changes hands here, just clout. Built for fun.</p>
+      <p>React · Redux Toolkit · Context API · axios · TVMaze, GitHub and DummyJSON APIs</p>
+    </footer>
+  );
+}
+
+const ROUTES = {
+  home: HomePage, bets: BetsPage, discover: DiscoverPage, wall: WallPage,
+  leaderboard: LeaderboardPage, profile: ProfilePage, join: JoinPage, how: HowPage, lab: LabPage
+};
+
+function App() {
+  const { path, query } = useHashRoute();
+  const dispatch = useDispatch();
+  const toast = useToast();
+  const { play } = useSettings();
+
+  // Once a second, close any bets whose timer has run out and pay out clout.
+  useEffect(() => {
+    function tick() {
+      const payouts = dispatch(resolveExpiredBets());
+      payouts.forEach(amount => {
+        if (amount > 0) { toast("You called it! +" + amount + " clout"); play(880); }
+        else { toast("Wrong call. " + amount + " clout", "error"); play(300); }
+      });
+    }
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [dispatch, toast, play]);
+
+  const Page = ROUTES[path] || NotFoundPage;
+  return (
+    <>
+      <Navbar path={path} />
+      <main>
+        <ErrorBoundary key={path}>
+          <Page query={query} />
+        </ErrorBoundary>
+      </main>
+      <Footer />
+    </>
+  );
+}
+
+
+/* =========================================================
+   14. START-UP
+   Providers wrap the app so every component can reach them:
+   Redux store > sound > toasts > logged-in user > bet composer > App
+   ========================================================= */
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <Provider store={store}>
+    <SettingsProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <ComposerProvider>
+            <App />
+          </ComposerProvider>
+        </AuthProvider>
+      </ToastProvider>
+    </SettingsProvider>
+  </Provider>
+);
+</script>
+</body>
+</html>
